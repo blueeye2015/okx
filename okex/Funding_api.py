@@ -4,8 +4,8 @@ from .consts import *
 
 class FundingAPI(Client):
 
-    def __init__(self, api_key, api_secret_key, passphrase, use_server_time=False, flag='1'):
-        Client.__init__(self, api_key, api_secret_key, passphrase, use_server_time, flag)
+    def __init__(self, api_key, api_secret_key, passphrase, use_server_time=False, flag='1', proxies=None):
+        super().__init__(api_key, api_secret_key, passphrase, use_server_time, flag, proxies)
 
     # Get Deposit Address
     def get_deposit_address(self, ccy):

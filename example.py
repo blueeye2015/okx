@@ -8,19 +8,25 @@ import okex.status_api as Status
 import json
 
 if __name__ == '__main__':
-    api_key = ""
-    secret_key = ""
-    passphrase = ""
+    api_key = "ba7f444f-e83e-4dd1-8507-bf8dd9033cbc"
+    secret_key = "D5474EF76B0A7397BFD26B9656006480"
+    passphrase = "TgTB+pJoM!d20F"
+
+    # 设置代理
+    proxies = {
+    'http': 'http://127.0.0.1:7890',
+    'https': 'http://127.0.0.1:7890'
+    }
     # flag是实盘与模拟盘的切换参数
     # flag = '1'  # 模拟盘
     flag = '0'  # 实盘
 
     # account api
-    accountAPI = Account.AccountAPI(api_key, secret_key, passphrase, False, flag)
+    accountAPI = Account.AccountAPI(api_key, secret_key, passphrase, False, flag, proxies)
     # 查看账户余额  Get Balance
     # result = accountAPI.get_account('BTC')
     # 查看持仓信息  Get Positions
-    # result = accountAPI.get_positions('FUTURES', 'BTC-USD-210402')
+    result = accountAPI.get_positions('SWAP', '')
     # 账单流水查询（近七天） Get Bills Details (recent 7 days)
     # result = accountAPI.get_bills_detail('FUTURES', 'BTC','cross')
     # 账单流水查询（近三个月） Get Bills Details (recent 3 months)
@@ -51,7 +57,7 @@ if __name__ == '__main__':
     # result = accountAPI.get_max_withdrawal('')
 
     # funding api
-    fundingAPI = Funding.FundingAPI(api_key, secret_key, passphrase, False, flag)
+    #fundingAPI = Funding.FundingAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 获取充值地址信息  Get Deposit Address
     # result = fundingAPI.get_deposit_address('')
     # 获取资金账户余额信息  Get Balance
@@ -72,7 +78,7 @@ if __name__ == '__main__':
     # result = fundingAPI.get_bills('USDT', '130')
 
     # market api
-    marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag)
+    #marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 获取所有产品行情信息  Get Tickers
     # result = marketAPI.get_tickers('SPOT')
     # 获取单个产品行情信息  Get Ticker
@@ -93,7 +99,7 @@ if __name__ == '__main__':
     # result = marketAPI.get_trades('BTC-USDT', '400')
 
     # public api
-    publicAPI = Public.PublicAPI(api_key, secret_key, passphrase, False, flag)
+    #publicAPI = Public.PublicAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 获取交易产品基础信息  Get instrument
     # result = publicAPI.get_instruments('FUTURES', 'BTC-USDT')
     # 获取交割和行权记录  Get Delivery/Exercise History
@@ -120,7 +126,7 @@ if __name__ == '__main__':
     # result = publicAPI.get_mark_price('FUTURES')
 
     # trade api
-    tradeAPI = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag)
+    #tradeAPI = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 下单  Place Order
     # result = tradeAPI.place_order(instId='BTC-USDT-210326', tdMode='cross', side='sell', posSide='short',
     #                               ordType='market', sz='100')
@@ -173,7 +179,7 @@ if __name__ == '__main__':
     # result = tradeAPI.order_algos_history('conditional', 'canceled', instType='FUTURES')
 
     # 子账户API subAccount
-    subAccountAPI = SubAccount.SubAccountAPI(api_key, secret_key, passphrase, False, flag)
+    #subAccountAPI = SubAccount.SubAccountAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 查询子账户的交易账户余额(适用于母账户) Query detailed balance info of Trading Account of a sub-account via the master account
     # result = subAccountAPI.balances(subAcct='')
     # 查询子账户转账记录(仅适用于母账户) History of sub-account transfer(applies to master accounts only)
@@ -190,7 +196,7 @@ if __name__ == '__main__':
     # result = subAccountAPI.control_transfer(ccy='', amt='', froms='', to='', fromSubAccount='', toSubAccount='')
 
     # 系统状态API(仅适用于实盘) system status
-    Status = Status.StatusAPI(api_key, secret_key, passphrase, False, flag)
+    #Status = Status.StatusAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 查看系统的升级状态
     # result = Status.status()
 

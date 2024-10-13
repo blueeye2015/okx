@@ -5,13 +5,14 @@ from . import consts as c, utils, exceptions
 
 class Client(object):
 
-    def __init__(self, api_key, api_secret_key, passphrase, use_server_time=False, flag='1'):
+    def __init__(self, api_key, api_secret_key, passphrase, use_server_time=False, flag='1', proxies=None):
 
         self.API_KEY = api_key
         self.API_SECRET_KEY = api_secret_key
         self.PASSPHRASE = passphrase
         self.use_server_time = use_server_time
         self.flag = flag
+        self.proxies = proxies  # 新增代理设置
 
     def _request(self, method, request_path, params):
 
@@ -35,16 +36,20 @@ class Client(object):
         response = None
 
         print("url:", url)
-        # print("headers:", header)
+								   
         print("body:", body)
 
-        if method == c.GET:
-            response = requests.get(url, headers=header)
-        elif method == c.POST:
-            response = requests.post(url, data=body, headers=header)
+        try:
+            if method == c.GET:
+                response = requests.get(url, headers=header, proxies=self.proxies)
+            elif method == c.POST:
+                response = requests.post(url, data=body, headers=header, proxies=self.proxies)
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed: {e}")
+            raise
 
         # exception handle
-        # print(response.headers)
+								 
 
         if not str(response.status_code).startswith('2'):
             raise exceptions.OkexAPIException(response)
@@ -59,7 +64,7 @@ class Client(object):
 
     def _get_timestamp(self):
         url = c.API_URL + c.SERVER_TIMESTAMP_URL
-        response = requests.get(url)
+        response = requests.get(url, proxies=self.proxies)  # 这里也使用代理
         if response.status_code == 200:
             return response.json()['ts']
         else:
