@@ -1,0 +1,103 @@
+import okex.Account_api as Account
+import okex.Trade_api as Trade
+import json
+
+def parse_positions(api_response):
+    # 解析JSON字符串
+    data = json.loads(api_response)
+    
+    # 检查API调用是否成功
+    if data['code'] != '0':
+        raise Exception(f"API调用失败，错误代码: {data['code']}")
+    
+    positions = []
+    for position in data['data']:
+        pos_info = {
+            'symbol': position['instId'],
+            'size': float(position['pos']),
+            'side': 'buy' if float(position['pos']) > 0 else 'sell',
+            'avg_price': float(position['avgPx']),
+            'mark_price': float(position['markPx']),
+            'liquidation_price': float(position['liqPx']),
+            'unrealized_pnl': float(position['upl']),
+            'uplRatio': float(position['uplRatio']),
+            'margin': float(position['margin']),
+            'leverage': float(position['lever'])
+        }
+        positions.append(pos_info)
+    
+    return positions
+
+def parse_orderlist(api_response):
+    # 解析JSON字符串
+    data = json.loads(api_response)
+    
+    # 检查API调用是否成功
+    if data['code'] != '0':
+        raise Exception(f"API调用失败，错误代码: {data['code']}")
+    
+    orderlist = []
+    for list in data['data']:
+        pos_info = {
+            'symbol': list['instId'],
+            'size': float(list['sz']),
+            'side': list['side'],
+            'price': float(list['px'])
+        }
+        orderlist.append(pos_info)
+    
+    return orderlist
+
+if __name__ == '__main__':
+    api_key = ""
+    secret_key = ""
+    passphrase = ""
+
+    # 设置代理
+    proxies = {
+    'http': 'http://127.0.0.1:7890',
+    'https': 'http://127.0.0.1:7890'
+    }
+    # flag是实盘与模拟盘的切换参数
+    # flag = '1'  # 模拟盘
+    flag = '0'  # 实盘
+
+    # account api
+    accountAPI = Account.AccountAPI(api_key, secret_key, passphrase, False, flag, proxies)
+    # 查看账户余额  Get Balance
+    # result = accountAPI.get_account('BTC')
+    # 查看持仓信息  Get Positions
+    result = accountAPI.get_positions('SWAP', '')
+    
+    # trade api
+    tradeAPI = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
+    # 使用函数
+    api_response = json.dumps(result)  # 这里应该是完整的API响应
+    try:
+        positions = parse_positions(api_response)
+        for pos in positions:
+            print(f"Symbol: {pos['symbol']}")
+            print(f"Position Size: {pos['size']}")
+            print(f"Side: {pos['side']}")
+            print(f"Liquidation Price: {pos['liquidation_price']}")
+            print(f"uplRatio: {pos['uplRatio']}")
+            print(f"Leverage: {pos['leverage']}")
+            print("------------------------")
+            #如果收益率>=-30%,补一次，但要判断是否已经存在一样的委托
+            if float(pos['uplRatio'])<=-0.3:
+                #获取该合约未完成订单
+                result1 = tradeAPI.get_order_list(instType='SWAP',instId=pos['symbol'])
+                orderlist = parse_orderlist(json.dumps(result1))
+                if not orderlist:
+                    print (f"{pos['symbol']} 没有{pos['side']}订单,收益率 :{pos['uplRatio']} ")
+                    print ("----下同币种单子-----")
+                    #计算强平价格，如果是buy则*1.2 ，如果是sell则*0.8
+                    price = float(pos['liquidation_price'])*(1-0.06) if pos['side'] == 'sell' else float(pos['liquidation_price'])*(1+0.05)
+                    print (f"price: {price}")
+                    order_reslut = tradeAPI.place_order(instId=pos['symbol'], tdMode='isolated', side=pos['side'],
+                                   ordType='limit', sz=abs(pos['size']), px = price)
+                    print(json.dumps(order_reslut))
+    except Exception as e:
+        print(f"Error: {e}")
+
+    
