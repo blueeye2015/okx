@@ -86,7 +86,7 @@ if __name__ == '__main__':
             print("------------------------")
 
             #如果收益率>=-30%,补一次，但要判断是否已经存在一样的委托
-            if float(pos['uplRatio'])<=-0.3:
+            if float(pos['uplRatio'])<=-0.4:
                 #获取该合约未完成订单
                 result1 = tradeAPI.get_order_list(instType='SWAP',instId=pos['symbol'])
                 orderlist = parse_orderlist(json.dumps(result1))
@@ -101,7 +101,7 @@ if __name__ == '__main__':
                     order_reslut = tradeAPI.place_order(instId=pos['symbol'], tdMode='isolated', side=pos['side'],
                                    ordType='limit', sz=abs(pos['size']), px = price, tpTriggerPx=tpprice,tpOrdPx=-1)
                     print(json.dumps(order_reslut))
-            elif float(pos['uplRatio'])>=-0.3 and float(pos['uplRatio'])<=0:
+            elif float(pos['uplRatio'])>=-0.4 and float(pos['uplRatio'])<=0:
                 #判断收益率如果大于-30%，则取消未完成订单
                 #获取该合约未完成订单
                 result1 = tradeAPI.get_order_list(instType='SWAP',instId=pos['symbol'])
