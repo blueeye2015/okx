@@ -50,9 +50,9 @@ def parse_orderlist(api_response):
     return orderlist
 
 if __name__ == '__main__':
-    api_key = ""
-    secret_key = ""
-    passphrase = ""
+    api_key = "ba7f444f-e83e-4dd1-8507-bf8dd9033cbc"
+    secret_key = "D5474EF76B0A7397BFD26B9656006480"
+    passphrase = "TgTB+pJoM!d20F"
 
     # 设置代理
     proxies = {
@@ -86,7 +86,7 @@ if __name__ == '__main__':
             print("------------------------")
 
             #如果收益率>=-30%,补一次，但要判断是否已经存在一样的委托
-            if float(pos['uplRatio'])<=-0.4:
+            if float(pos['uplRatio'])<=-0.3:
                 #获取该合约未完成订单
                 result1 = tradeAPI.get_order_list(instType='SWAP',instId=pos['symbol'])
                 orderlist = parse_orderlist(json.dumps(result1))
@@ -95,9 +95,11 @@ if __name__ == '__main__':
                     print ("----下同币种单子-----")
                     #计算强平价格，如果是buy则*1.2 ，如果是sell则*0.8
                     price = float(pos['liquidation_price'])*(1-0.02) if pos['side'] == 'sell' else float(pos['liquidation_price'])*(1+0.02)
-                    print (f"price: {price}")
+                    #计算止盈价格，价格等于挂单价格*1.05
+                    tpprice = price*0.99 if pos['side'] == 'sell' else price*1.01
+                    print (f"price: {price} tpprice: {tpprice}")
                     order_reslut = tradeAPI.place_order(instId=pos['symbol'], tdMode='isolated', side=pos['side'],
-                                   ordType='limit', sz=abs(pos['size']), px = price)
+                                   ordType='limit', sz=abs(pos['size']), px = price, tpTriggerPx=tpprice,tpOrdPx=-1)
                     print(json.dumps(order_reslut))
             elif float(pos['uplRatio'])>=-0.3 and float(pos['uplRatio'])<=0:
                 #判断收益率如果大于-30%，则取消未完成订单
