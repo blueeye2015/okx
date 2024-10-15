@@ -40,6 +40,7 @@ def parse_orderlist(api_response):
     for list in data['data']:
         pos_info = {
             'symbol': list['instId'],
+            'ordId': list['ordId'],
             'size': float(list['sz']),
             'side': list['side'],
             'price': float(list['px'])
@@ -49,9 +50,9 @@ def parse_orderlist(api_response):
     return orderlist
 
 if __name__ == '__main__':
-    api_key = ""
-    secret_key = ""
-    passphrase = ""
+    api_key = "ba7f444f-e83e-4dd1-8507-bf8dd9033cbc"
+    secret_key = "D5474EF76B0A7397BFD26B9656006480"
+    passphrase = "TgTB+pJoM!d20F"
 
     # 设置代理
     proxies = {
@@ -83,8 +84,9 @@ if __name__ == '__main__':
             print(f"uplRatio: {pos['uplRatio']}")
             print(f"Leverage: {pos['leverage']}")
             print("------------------------")
+
             #如果收益率>=-30%,补一次，但要判断是否已经存在一样的委托
-            if float(pos['uplRatio'])<=-0.3:
+            if float(pos['uplRatio'])<=-0.4:
                 #获取该合约未完成订单
                 result1 = tradeAPI.get_order_list(instType='SWAP',instId=pos['symbol'])
                 orderlist = parse_orderlist(json.dumps(result1))
@@ -92,11 +94,20 @@ if __name__ == '__main__':
                     print (f"{pos['symbol']} 没有{pos['side']}订单,收益率 :{pos['uplRatio']} ")
                     print ("----下同币种单子-----")
                     #计算强平价格，如果是buy则*1.2 ，如果是sell则*0.8
-                    price = float(pos['liquidation_price'])*(1-0.06) if pos['side'] == 'sell' else float(pos['liquidation_price'])*(1+0.05)
+                    price = float(pos['liquidation_price'])*(1-0.02) if pos['side'] == 'sell' else float(pos['liquidation_price'])*(1+0.02)
                     print (f"price: {price}")
                     order_reslut = tradeAPI.place_order(instId=pos['symbol'], tdMode='isolated', side=pos['side'],
                                    ordType='limit', sz=abs(pos['size']), px = price)
                     print(json.dumps(order_reslut))
+            elif float(pos['uplRatio'])>=-0.3 and float(pos['uplRatio'])<=0:
+                #判断收益率如果大于-30%，则取消未完成订单
+                #获取该合约未完成订单
+                result1 = tradeAPI.get_order_list(instType='SWAP',instId=pos['symbol'])
+                orderlist = parse_orderlist(json.dumps(result1))
+                print (f"{pos['symbol']} 的{pos['side']}订单,收益率 :{pos['uplRatio']} ")
+                for order in orderlist:
+                    order_reslut = tradeAPI.cancel_order(instId=pos['symbol'], ordId=order['ordId'])
+                    print (f"{order['symbol']} 的{order['side']}订单 ordid :{order['ordId']} 撤销")
     except Exception as e:
         print(f"Error: {e}")
 

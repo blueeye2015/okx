@@ -8,9 +8,9 @@ import okex.status_api as Status
 import json
 
 if __name__ == '__main__':
-    api_key = ""
-    secret_key = ""
-    passphrase = ""
+    api_key = "ba7f444f-e83e-4dd1-8507-bf8dd9033cbc"
+    secret_key = "D5474EF76B0A7397BFD26B9656006480"
+    passphrase = "TgTB+pJoM!d20F"
 
     # 设置代理
     proxies = {
@@ -22,11 +22,11 @@ if __name__ == '__main__':
     flag = '0'  # 实盘
 
     # account api
-    accountAPI = Account.AccountAPI(api_key, secret_key, passphrase, False, flag, proxies)
+    #accountAPI = Account.AccountAPI(api_key, secret_key, passphrase, False, flag, proxies)
     # 查看账户余额  Get Balance
     # result = accountAPI.get_account('BTC')
     # 查看持仓信息  Get Positions
-    result = accountAPI.get_positions('SWAP', '')
+    #result = accountAPI.get_positions('SWAP', '')
     # 账单流水查询（近七天） Get Bills Details (recent 7 days)
     # result = accountAPI.get_bills_detail('FUTURES', 'BTC','cross')
     # 账单流水查询（近三个月） Get Bills Details (recent 3 months)
@@ -126,10 +126,10 @@ if __name__ == '__main__':
     # result = publicAPI.get_mark_price('FUTURES')
 
     # trade api
-    #tradeAPI = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
+    tradeAPI = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 下单  Place Order
-    # result = tradeAPI.place_order(instId='BTC-USDT-210326', tdMode='cross', side='sell', posSide='short',
-    #                               ordType='market', sz='100')
+    #result = tradeAPI.place_order(instId='BTC-USDT-SWAP', tdMode='isolated', side='buy',
+    #                               ordType='limit',px = '54510.32899439961', sz='1', tpTriggerPx='58000',tpOrdPx='58000')
     # 批量下单  Place Multiple Orders
     # result = tradeAPI.place_multiple_orders([
     #     {'instId': 'BTC-USD-210402', 'tdMode': 'isolated', 'side': 'buy', 'ordType': 'limit', 'sz': '1', 'px': '17400',
@@ -141,7 +141,7 @@ if __name__ == '__main__':
     # ])
 
     # 撤单  Cancel Order
-    # result = tradeAPI.cancel_order('BTC-USD-201225', '257164323454332928')
+    result = tradeAPI.cancel_order('BTC-USDT-SWAP', '1895569859456712704')
     # 批量撤单  Cancel Multiple Orders
     # result = tradeAPI.cancel_multiple_orders([
     #     {"instId": "BTC-USD-210402", "ordId": "297389358169071616"},
