@@ -57,6 +57,7 @@ HISTORY_CANDLES = '/api/v5/market/history-candles'
 INDEX_CANSLES = '/api/v5/market/index-candles'
 MARKPRICE_CANDLES = '/api/v5/market/mark-price-candles'
 MARKET_TRADES = '/api/v5/market/trades'
+HISTORY_TRADES = '/api/v5/market/history-trades'
 
 # Public Data
 INSTRUMENT_INFO = '/api/v5/public/instruments'

@@ -8,7 +8,7 @@ def parse_positions(api_response):
     
     # 检查API调用是否成功
     if data['code'] != '0':
-        raise Exception(f"API调用失败，错误代码: {data['code']}")
+        raise Exception(f"API调用失败,错误代码: {data['code']}")
     
     positions = []
     for position in data['data']:
@@ -50,9 +50,9 @@ def parse_orderlist(api_response):
     return orderlist
 
 if __name__ == '__main__':
-    api_key = ""
-    secret_key = ""
-    passphrase = ""
+    api_key = "ba7f444f-e83e-4dd1-8507-bf8dd9033cbc"
+    secret_key = "D5474EF76B0A7397BFD26B9656006480"
+    passphrase = "TgTB+pJoM!d20F"
 
     # 设置代理
     proxies = {

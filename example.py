@@ -78,7 +78,7 @@ if __name__ == '__main__':
     # result = fundingAPI.get_bills('USDT', '130')
 
     # market api
-    #marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
+    marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 获取所有产品行情信息  Get Tickers
     # result = marketAPI.get_tickers('SPOT')
     # 获取单个产品行情信息  Get Ticker
@@ -97,6 +97,7 @@ if __name__ == '__main__':
     # result = marketAPI.get_markprice_candlesticks('BTC-USDT')
     # 获取交易产品公共成交数据  Get Trades
     # result = marketAPI.get_trades('BTC-USDT', '400')
+    result = marketAPI.history_trades('BTC-USDT',limit='10',type=1)
 
     # public api
     #publicAPI = Public.PublicAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
@@ -126,7 +127,7 @@ if __name__ == '__main__':
     # result = publicAPI.get_mark_price('FUTURES')
 
     # trade api
-    tradeAPI = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
+    #tradeAPI = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 下单  Place Order
     #result = tradeAPI.place_order(instId='BTC-USDT-SWAP', tdMode='isolated', side='buy',
     #                               ordType='limit',px = '54510.32899439961', sz='1', tpTriggerPx='58000',tpOrdPx='58000')
@@ -141,7 +142,7 @@ if __name__ == '__main__':
     # ])
 
     # 撤单  Cancel Order
-    result = tradeAPI.cancel_order('BTC-USDT-SWAP', '1895569859456712704')
+    #result = tradeAPI.cancel_order('BTC-USDT-SWAP', '1895569859456712704')
     # 批量撤单  Cancel Multiple Orders
     # result = tradeAPI.cancel_multiple_orders([
     #     {"instId": "BTC-USD-210402", "ordId": "297389358169071616"},

@@ -54,3 +54,8 @@ class MarketAPI(Client):
     def get_trades(self, instId, limit=''):
         params = {'instId': instId, 'limit': limit}
         return self._request_with_params(GET, MARKET_TRADES, params)
+    
+    # Get history trades
+    def history_trades(self, instId, after='', before='', limit='', type =''):
+        params = {'instId': instId, 'after': after, 'before': before, 'limit': limit, type : 'type'}
+        return self._request_with_params(GET, HISTORY_TRADES, params)
