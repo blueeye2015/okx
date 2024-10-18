@@ -1,53 +1,8 @@
 import okex.Account_api as Account
 import okex.Trade_api as Trade
 import json
+from api_parser import parse_positions,parse_orderlist
 
-def parse_positions(api_response):
-    # 解析JSON字符串
-    data = json.loads(api_response)
-    
-    # 检查API调用是否成功
-    if data['code'] != '0':
-        raise Exception(f"API调用失败,错误代码: {data['code']}")
-    
-    positions = []
-    for position in data['data']:
-        pos_info = {
-            'symbol': position['instId'],
-            'size': float(position['pos']),
-            'side': 'buy' if float(position['pos']) > 0 else 'sell',
-            'avg_price': float(position['avgPx']),
-            'mark_price': float(position['markPx']),
-            'liquidation_price': float(position['liqPx']),
-            'unrealized_pnl': float(position['upl']),
-            'uplRatio': float(position['uplRatio']),
-            'margin': float(position['margin']),
-            'leverage': float(position['lever'])
-        }
-        positions.append(pos_info)
-    
-    return positions
-
-def parse_orderlist(api_response):
-    # 解析JSON字符串
-    data = json.loads(api_response)
-    
-    # 检查API调用是否成功
-    if data['code'] != '0':
-        raise Exception(f"API调用失败，错误代码: {data['code']}")
-    
-    orderlist = []
-    for list in data['data']:
-        pos_info = {
-            'symbol': list['instId'],
-            'ordId': list['ordId'],
-            'size': float(list['sz']),
-            'side': list['side'],
-            'price': float(list['px'])
-        }
-        orderlist.append(pos_info)
-    
-    return orderlist
 
 if __name__ == '__main__':
     api_key = "ba7f444f-e83e-4dd1-8507-bf8dd9033cbc"
