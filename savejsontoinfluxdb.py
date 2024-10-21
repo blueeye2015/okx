@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import pytz
 
 url = "http://localhost:8086"
-token = "SHKUNhCDk25b9mBZD9cQnTd5JI8Bwj6t8tQctQZKvomLSI6W5fZacdwgwQtc89HFmPbUqsNk3bUFBbl4urjddw=="
+token = "aEOL_HtGEGsMLtPp1KI3y0VA5L8MxRSAOWDXZh2TektZoizfZ5pGKPPLjSnBVxo9HQjND865WKN8ehFY-e7HOA=="
 org = "marketdata"
 bucket = "history_trades"
 
@@ -14,7 +14,7 @@ client = InfluxDBClient(url=url, token=token, org=org)
 write_api = client.write_api(write_options=SYNCHRONOUS)
 
 try:
-    with open('D:\okx\history_trade.json', 'r') as file:
+    with open('D:\OKex-API\history_trade.json', 'r') as file:
         json_data = json.load(file)
 
     for trade in json_data['data']:
