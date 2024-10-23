@@ -1,8 +1,9 @@
 import okex.Account_api as Account
 import okex.Trade_api as Trade
 import json
-from api_parser import parse_positions,parse_orderlist
+from api_parser import parse_positions,parse_orderlist,parse_balance
 import logging
+from regular_err import SpecialJumpException
 
 if __name__ == '__main__':
     api_key = "ba7f444f-e83e-4dd1-8507-bf8dd9033cbc"
@@ -30,10 +31,17 @@ if __name__ == '__main__':
     # 查看持仓信息  Get Positions
     result = accountAPI.get_positions('SWAP', '')
     
+    # 获取保证金余额
+    result1 = accountAPI.get_account('USDT')
+
+    balance = parse_balance(json.dumps(result1))
+
     # trade api
     tradeAPI = Trade.TradeAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 使用函数
     api_response = json.dumps(result)  # 这里应该是完整的API响应
+    
+
     try:
         positions = parse_positions(api_response)
         for pos in positions:
@@ -44,6 +52,7 @@ if __name__ == '__main__':
             logging.info(f"uplRatio: {pos['uplRatio']}")
             logging.info(f"Leverage: {pos['leverage']}")
             logging.info(f"margin: {pos['margin']}")
+            logging.info(f"mgnRatio: {pos['mgnRatio']}")            
             logging.info("------------------------")
 
             #如果收益率>=-30%,补一次，但要判断是否已经存在一样的委托
@@ -69,10 +78,14 @@ if __name__ == '__main__':
                             else price*0.97 if float(pos['margin']) <= 200 \
                             else price*0.98 if float(pos['margin']) <= 300 else price*0.99
                     logging.info (f"price: {price} tpprice: {tpprice}")
-                    order_reslut = tradeAPI.place_order(instId=pos['symbol'], tdMode='isolated', side=pos['side'],
+                    if float(pos['margin'])<float(balance['availBal']):
+                        order_reslut = tradeAPI.place_order(instId=pos['symbol'], tdMode='isolated', side=pos['side'],
                                    ordType='limit', sz=abs(pos['size']), px = price, tpTriggerPx=tpprice,tpOrdPx=-1)
-                    logging.info(json.dumps(order_reslut))
-            elif float(pos['uplRatio'])>=-0.4 and float(pos['uplRatio'])<=0:
+                        logging.info(json.dumps(order_reslut))
+                    else:
+                        #保证金余额小于下单所需金额，把手上小单平了
+                        raise SpecialJumpException("保证金过少")
+            elif float(pos['uplRatio'])>=-0.3 and float(pos['uplRatio'])<=0:
                 #判断收益率如果大于-30%，则取消未完成订单
                 #获取该合约未完成订单
                 result1 = tradeAPI.get_order_list(instType='SWAP',instId=pos['symbol'])
@@ -83,5 +96,10 @@ if __name__ == '__main__':
                     logging.info (f"{order['symbol']} 的{order['side']}订单 ordid :{order['ordId']} 撤销")
     except Exception as e:
         logging.info(f"Error: {e}")
-
+    except SpecialJumpException as e:
+        logging.info(f"special: {e}")
+        for pos1 in positions:
+            if float(pos1['uplRatio'])>0 and pos1['margin']<200:
+                close_pos_reslut = tradeAPI.close_positions(instId=pos['symbol'],mgnMode='isolated')
+                logging.info(json.dumps(close_pos_reslut))
     
