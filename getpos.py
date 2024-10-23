@@ -99,7 +99,7 @@ if __name__ == '__main__':
     except SpecialJumpException as e:
         logging.info(f"special: {e}")
         for pos1 in positions:
-            if float(pos1['uplRatio'])>0 and pos1['margin']<200:
+            if (float(pos1['uplRatio'])>0 and pos1['margin']<200) or (pos1['margin']<100):
                 close_pos_reslut = tradeAPI.close_positions(instId=pos['symbol'],mgnMode='isolated')
                 logging.info(json.dumps(close_pos_reslut))
     
