@@ -56,7 +56,7 @@ if __name__ == '__main__':
             logging.info("------------------------")
 
             #如果收益率>=-30%,补一次，但要判断是否已经存在一样的委托
-            if float(pos['uplRatio'])<=-0.4:
+            if float(pos['uplRatio'])<=-0.4 or pos['mgnRatio']<2:
                 #获取该合约未完成订单
                 result1 = tradeAPI.get_order_list(instType='SWAP',instId=pos['symbol'])
                 orderlist = parse_orderlist(json.dumps(result1))
@@ -78,7 +78,7 @@ if __name__ == '__main__':
                             else price*0.97 if float(pos['margin']) <= 200 \
                             else price*0.98 if float(pos['margin']) <= 300 else price*0.99
                     logging.info (f"price: {price} tpprice: {tpprice}")
-                    if float(pos['margin'])<float(balance['availBal']):
+                    if float(pos['margin'])<float(balance[0]['availBal']):
                         order_reslut = tradeAPI.place_order(instId=pos['symbol'], tdMode='isolated', side=pos['side'],
                                    ordType='limit', sz=abs(pos['size']), px = price, tpTriggerPx=tpprice,tpOrdPx=-1)
                         logging.info(json.dumps(order_reslut))
