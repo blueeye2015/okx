@@ -8,10 +8,9 @@ import okex.status_api as Status
 import json
 
 if __name__ == '__main__':
-    api_key = ""
-    secret_key = ""
-    passphrase = ""
-
+    api_key = "ba7f444f-e83e-4dd1-8507-bf8dd9033cbc"
+    secret_key = "D5474EF76B0A7397BFD26B9656006480"
+    passphrase = "TgTB+pJoM!d20F"
     # 设置代理
     proxies = {
     'http': 'http://127.0.0.1:7890',
@@ -22,9 +21,9 @@ if __name__ == '__main__':
     flag = '0'  # 实盘
 
     # account api
-    #accountAPI = Account.AccountAPI(api_key, secret_key, passphrase, False, flag, proxies)
+    accountAPI = Account.AccountAPI(api_key, secret_key, passphrase, False, flag, proxies)
     # 查看账户余额  Get Balance
-    # result = accountAPI.get_account('BTC')
+    result = accountAPI.get_account('USDT')
     # 查看持仓信息  Get Positions
     #result = accountAPI.get_positions('SWAP', '')
     # 账单流水查询（近七天） Get Bills Details (recent 7 days)
@@ -78,7 +77,7 @@ if __name__ == '__main__':
     # result = fundingAPI.get_bills('USDT', '130')
 
     # market api
-    marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
+    #marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 获取所有产品行情信息  Get Tickers
     # result = marketAPI.get_tickers('SPOT')
     # 获取单个产品行情信息  Get Ticker
@@ -97,7 +96,7 @@ if __name__ == '__main__':
     # result = marketAPI.get_markprice_candlesticks('BTC-USDT')
     # 获取交易产品公共成交数据  Get Trades
     # result = marketAPI.get_trades('BTC-USDT', '400')
-    result = marketAPI.history_trades('BTC-USDT',limit='10',type=1)
+    #result = marketAPI.history_trades('BTC-USDT',limit='10',type=1)
 
     # public api
     #publicAPI = Public.PublicAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
@@ -202,3 +201,5 @@ if __name__ == '__main__':
     # result = Status.status()
 
     print(json.dumps(result))
+    api= json.dumps(result)
+    api['data']
