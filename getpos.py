@@ -6,9 +6,9 @@ import logging
 from regular_err import SpecialJumpException
 
 if __name__ == '__main__':
-    api_key = ""
-    secret_key = ""
-    passphrase = ""
+    api_key = "ba7f444f-e83e-4dd1-8507-bf8dd9033cbc"
+    secret_key = "D5474EF76B0A7397BFD26B9656006480"
+    passphrase = "TgTB+pJoM!d20F"
 
     # 设置日志配置
     logging.basicConfig(filename='output.log', level=logging.INFO,
@@ -102,4 +102,8 @@ if __name__ == '__main__':
             if (float(pos1['uplRatio'])>0 and pos1['margin']<200) or (pos1['margin']<100):
                 close_pos_reslut = tradeAPI.close_positions(instId=pos['symbol'],mgnMode='isolated')
                 logging.info(json.dumps(close_pos_reslut))
+            #再次尝试下单
+            order_reslut = tradeAPI.place_order(instId=pos['symbol'], tdMode='isolated', side=pos['side'],
+                                   ordType='limit', sz=abs(pos['size']), px = price, tpTriggerPx=tpprice,tpOrdPx=-1)
+            logging.info(json.dumps(order_reslut))
     
