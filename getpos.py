@@ -6,9 +6,9 @@ import logging
 from regular_err import SpecialJumpException
 
 if __name__ == '__main__':
-    api_key = "ba7f444f-e83e-4dd1-8507-bf8dd9033cbc"
-    secret_key = "D5474EF76B0A7397BFD26B9656006480"
-    passphrase = "TgTB+pJoM!d20F"
+    api_key = ""
+    secret_key = ""
+    passphrase = ""
 
     # 设置日志配置
     logging.basicConfig(filename='output.log', level=logging.INFO,
