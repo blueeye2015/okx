@@ -265,9 +265,12 @@ async def subscribe_without_login(url, channels, proxy=None):
                                 print("校验结果为：False，正在重新订阅……")
 
                                 # 取消订阅
-                                await unsubscribe_without_login(url, channels)
+                                await unsubscribe_without_login(url, channels, proxy)
                                 # 发送订阅
-                                async with websockets.connect(url) as ws:
+                                if proxy:
+                                    new_ws = await create_connection_with_proxy(url, proxy)
+                                else:
+                                    new_ws = await connect(url)
                                     sub_param = {"op": "subscribe", "args": channels}
                                     sub_str = json.dumps(sub_param)
                                     await ws.send(sub_str)
