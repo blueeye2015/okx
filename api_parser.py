@@ -32,7 +32,8 @@ class PositionsParser(BaseParser):
             'unrealized_pnl': float(position['upl']),
             'uplRatio': float(position['uplRatio']),
             'margin': float(position['margin']),
-            'leverage': float(position['lever'])
+            'leverage': float(position['lever']),
+            'mgnRatio': float(position['mgnRatio'])            
         }
 
 ##未完成订单解析字符串json
@@ -65,6 +66,28 @@ class TradesParser(BaseParser):
             'price': float(trade['px']),
             'ts': trade['ts']
         }        
+
+#获取保证金余额
+class BalanceParser(BaseParser):
+    SUCCESS_CODE_KEY = 'code'
+    SUCCESS_CODE_VALUE = '0'
+    DATA_KEY = 'data'
+    
+    def parse_item(self, balance):
+        # 取出 details 中的第一个元素
+        details = balance['details'][0]
+        return {
+            'availBal': float(details['availBal']),
+            'totalEq': float(balance['totalEq']),
+            'upl': float(details['upl']),
+            'isoEq': float(balance['isoEq']),
+            # 你可以根据需要添加更多字段
+        }
+
+# 余额调用
+def parse_balance(api_response):
+    parser = BalanceParser(api_response)
+    return parser.parse()
 
 # 持仓调用
 def parse_positions(api_response):
