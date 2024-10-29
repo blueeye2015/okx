@@ -307,7 +307,8 @@ async def subscribe_without_login(url, channels, proxy=None):
                                             sub_param = {"op": "subscribe", "args": channels}
                                             sub_str = json.dumps(sub_param)
                                             await new_ws.send(sub_str)
-                                            print(f"send: {sub_str}")
+                                            print(f"send: {sub_str}") 
+                                     
         except Exception as e:
             print(f"连接断开，正在重连…… 错误: {e}")
         finally:
