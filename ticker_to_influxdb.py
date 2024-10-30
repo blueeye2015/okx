@@ -10,7 +10,7 @@ class BaseMarketData:
     inst_id: str
     timestamp: int
     channel: str
-    inst_type: str = "SPOT"
+    inst_type: str 
 
     def to_influx_point(self) -> Point:
         """转换为InfluxDB的Point对象"""
@@ -32,6 +32,7 @@ class BaseMarketData:
     @abstractmethod
     def get_measurement(self) -> str:
         """获取measurement名称"""
+        return "tickers"
         pass
 
     def get_tags(self) -> Dict[str, str]:
@@ -48,7 +49,7 @@ class BaseMarketData:
         pass
 
 @dataclass
-class TickerData:
+class TickerData(BaseMarketData):
     inst_type: str
     inst_id: str
     last: float
@@ -64,7 +65,6 @@ class TickerData:
     sod_utc8: float
     vol_ccy_24h: float
     vol_24h: float
-    ts: int
     
     def get_measurement(self) -> str:
         return "tickers"
@@ -73,9 +73,13 @@ class TickerData:
     def from_json(cls, json_data: Dict) -> 'TickerData':
         """从JSON数据创建TickerData对象"""
         data = json_data['data'][0]  # 获取data数组的第一个元素
+        arg = json_data['arg']       # 获取arg对象
         return cls(
+            # BaseMarketData的必需参数
             inst_type=data['instType'],
             inst_id=data['instId'],
+            timestamp=int(data['ts']),
+            channel=arg['channel'],
             last=float(data['last']),
             last_sz=float(data['lastSz']),
             ask_px=float(data['askPx']),
@@ -88,8 +92,7 @@ class TickerData:
             sod_utc0=float(data['sodUtc0']),
             sod_utc8=float(data['sodUtc8']),
             vol_ccy_24h=float(data['volCcy24h']),
-            vol_24h=float(data['vol24h']),
-            ts=int(data['ts'])
+            vol_24h=float(data['vol24h'])
         )
 
 

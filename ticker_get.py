@@ -1,25 +1,69 @@
 import asyncio
-import websockets
 import json
 import requests
-import hmac
-import base64
-import zlib
 import datetime
 import time
 import aiohttp
 from websockets import connect, ConnectionClosed
 from websockets.client import WebSocketClientProtocol
 from ticker_to_influxdb import TickerData,InfluxDBManager
-
+from queue import Queue, Empty
+from threading import Thread
 
 INFLUX_CONFIG = {
     "url": "http://localhost:8086",
-    "token": "your-token",
+    "token": "SHKUNhCDk25b9mBZD9cQnTd5JI8Bwj6t8tQctQZKvomLSI6W5fZacdwgwQtc89HFmPbUqsNk3bUFBbl4urjddw==",
     "org": "marketdata",
-    "bucket": "ticker"
+    "bucket": "history_trades"
 }
 
+class DatabaseWriter:
+    def __init__(self, config, buffer_size=1000):
+        self.db_manager = InfluxDBManager(**config)
+        self.queue = Queue(maxsize=buffer_size)
+        self.running = True
+        self.worker_thread = Thread(target=self._worker, daemon=True)
+        self.worker_thread.start()
+
+    def write(self, ticker):
+        """将数据放入队列"""
+        self.queue.put(ticker)
+
+    def _worker(self):
+        """后台工作线程，批量写入数据"""
+        batch = []
+        batch_size = 5  # 每批处理的数据量
+        batch_timeout = 1  # 最大等待时间（秒）
+
+        while self.running:
+            try:
+                # 收集批量数据
+                start_time = time.time()
+                while len(batch) < batch_size and time.time() - start_time < batch_timeout:
+                    try:
+                        ticker = self.queue.get(timeout=0.1)
+                        batch.append(ticker)
+                    except Empty:  # 使用导入的 Empty 异常
+                        break
+
+                # 如果有数据则批量写入
+                if batch:
+                    try:
+                        for ticker in batch:
+                            self.db_manager.write_data(ticker)
+                        batch = []
+                    except Exception as e:
+                        print(f"Error writing to database: {e}")
+
+            except Exception as e:
+                print(f"Worker thread error: {e}")
+
+    def close(self):
+        """关闭数据库连接"""
+        self.running = False
+        self.worker_thread.join()
+        self.db_manager.close()
+        
 async def create_connection_with_proxy(uri, proxy):
     try:
         session = aiohttp.ClientSession()
@@ -50,7 +94,9 @@ def get_local_timestamp():
 
 
 async def subscribe_without_login(url, channels, proxy=None):
-    l = []
+    # 创建数据库写入器（全局单例）
+    db_writer = DatabaseWriter(INFLUX_CONFIG)
+    
     while True:
         ws = None
         session = None
@@ -102,8 +148,12 @@ async def subscribe_without_login(url, channels, proxy=None):
 
                 print(f"{get_timestamp()} {res_data}")
                 ticker_data = json.loads(res_data)
-                #如果是行情数据则存入influxdb
                 
+                # 创建数据库管理器并写入数据
+                if 'data' in ticker_data:  # 只有在成功解析时才写入
+                    #如果是行情数据则存入influxdb
+                    ticker = TickerData.from_json(ticker_data)
+                    db_writer.write(ticker)
                 res = eval(res[1])
                 if 'event' in res:
                     continue
@@ -118,49 +168,13 @@ async def subscribe_without_login(url, channels, proxy=None):
                 await session.close()
             await asyncio.sleep(5)  # 等待5秒后重试
 
+if __name__ == "__main__":
+    proxies = 'http://127.0.0.1:7890'
+    url = "wss://ws.okx.com:8443/ws/v5/public"
+    channels = [{"channel": "tickers", "instId": "BTC-USDT"}]
 
-proxies = 'http://127.0.0.1:7890'
-# WebSocket公共频道
-# 实盘
-url = "wss://ws.okx.com:8443/ws/v5/public"
-# 模拟盘
-# url = "wss://ws.okex.com:8443/ws/v5/public?brokerId=9999"
-
-# WebSocket私有频道
-# 实盘
-# url = "wss://ws.okex.com:8443/ws/v5/private"
-# 模拟盘
-# url = "wss://ws.okex.com:8443/ws/v5/private?brokerId=9999"
-
-'''
-公共频道
-:param channel: 频道名
-:param instType: 产品类型
-:param instId: 产品ID
-:param uly: 合约标的指数
-
-'''
-
-# 行情频道
-channels = [{"channel": "tickers", "instId": "BTC-USDT"}]
-
-'''
-私有频道
-:param channel: 频道名
-:param ccy: 币种
-:param instType: 产品类型
-:param uly: 合约标的指数
-:param instId: 产品ID
-
-'''
-
-
-
-
-
-loop = asyncio.get_event_loop()
-
-# 公共频道 不需要登录（行情，持仓总量，K线，标记价格，深度，资金费率等）
-loop.run_until_complete(subscribe_without_login(url, channels,proxies))
-
-loop.close()
+    loop = asyncio.get_event_loop()
+    try:
+        loop.run_until_complete(subscribe_without_login(url, channels, proxies))
+    finally:
+        loop.close()
