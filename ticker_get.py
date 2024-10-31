@@ -18,7 +18,7 @@ INFLUX_CONFIG = {
 }
 
 class DatabaseWriter:
-    def __init__(self, config, buffer_size=1000):
+    def __init__(self, config, buffer_size=5):
         self.db_manager = InfluxDBManager(**config)
         self.queue = Queue(maxsize=buffer_size)
         self.running = True
@@ -29,6 +29,30 @@ class DatabaseWriter:
         """将数据放入队列"""
         self.queue.put(ticker)
 
+    def write_batch(self, ticker_list):
+        """
+        批量写入数据到InfluxDB
+        Args:
+            ticker_list: TickerData对象列表
+        """
+        try:
+            points = []
+            for ticker in ticker_list:
+                point = ticker.to_influx_point()
+                if point:
+                    points.append(point)
+            
+            if points:
+                self.db_manager.write_api.write(
+                    bucket=self.db_manager.bucket,
+                    org=self.db_manager.org,
+                    record=points
+                )
+                print(f"Successfully wrote {len(points)} points to database")
+        except Exception as e:
+            print(f"Error in batch writing: {e}")
+            raise
+    
     def _worker(self):
         """后台工作线程，批量写入数据"""
         batch = []
@@ -42,18 +66,25 @@ class DatabaseWriter:
                 while len(batch) < batch_size and time.time() - start_time < batch_timeout:
                     try:
                         ticker = self.queue.get(timeout=0.1)
-                        batch.append(ticker)
-                    except Empty:  # 使用导入的 Empty 异常
+                        if isinstance(ticker, TickerData):  # 确保数据类型正确
+                            batch.append(ticker)
+                    except Empty:
                         break
 
                 # 如果有数据则批量写入
                 if batch:
                     try:
-                        for ticker in batch:
-                            self.db_manager.write_data(ticker)
+                        self.write_batch(batch)
                         batch = []
                     except Exception as e:
                         print(f"Error writing to database: {e}")
+                        # 如果批量写入失败，尝试逐条写入
+                        for ticker in batch:
+                            try:
+                                self.db_manager.write_data(ticker)
+                            except Exception as e:
+                                print(f"Error writing single record: {e}")
+                        batch = []
 
             except Exception as e:
                 print(f"Worker thread error: {e}")

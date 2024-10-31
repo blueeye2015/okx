@@ -121,22 +121,11 @@ class InfluxDBManager:
         """
         try:
             point = data.to_influx_point()
-            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
+            if point:
+                self.write_api.write(bucket=self.bucket, org=self.org, record=point)
         except Exception as e:
             print(f"Error writing data: {e}")
             
-    def write_batch(self, data_list: List[BaseMarketData]) -> None:
-        """
-        批量写入数据
-        
-        Args:
-            data_list: 市场数据对象列表
-        """
-        try:
-            points = [data.to_influx_point() for data in data_list]
-            self.write_api.write(bucket=self.bucket, org=self.org, record=points)
-        except Exception as e:
-            print(f"Error writing batch data: {e}")
     
     def close(self):
         """关闭数据库连接"""
