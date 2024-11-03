@@ -4,12 +4,14 @@ import aiohttp
 from dataclasses import dataclass
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
-import datetime
+from datetime import datetime, timedelta
+import pytz
 
+tz = pytz.timezone('Asia/Shanghai')  # GMT+8
 # InfluxDB配置
 INFLUX_CONFIG = {
     "url": "http://localhost:8086",
-    "token": "SHKUNhCDk25b9mBZD9cQnTd5JI8Bwj6t8tQctQZKvomLSI6W5fZacdwgwQtc89HFmPbUqsNk3bUFBbl4urjddw==",
+    "token": "aEOL_HtGEGsMLtPp1KI3y0VA5L8MxRSAOWDXZh2TektZoizfZ5pGKPPLjSnBVxo9HQjND865WKN8ehFY-e7HOA==",
     "org": "marketdata",
     "bucket": "history_trades"
 }
@@ -40,11 +42,12 @@ class TickerData:
         try:
             data = json_data['data'][0]  # 获取data数组的第一个元素
             arg = json_data['arg']       # 获取arg对象
-            
+            ts_int = int(data['ts'])
+            trade_time = datetime.fromtimestamp(ts_int / 1000, tz=tz)
             return cls(
                 inst_id=data['instId'],
                 inst_type=data['instType'],
-                timestamp=int(data['ts']),
+                timestamp=trade_time,
                 channel=arg['channel'],
                 last=float(data['last']),
                 last_sz=float(data['lastSz']),
@@ -100,7 +103,7 @@ class TickerWriter:
                     .time(ticker.timestamp))
 
             self.write_api.write(bucket=self.bucket, org=self.org, record=point)
-            print(f"Successfully wrote ticker data for {ticker.inst_id} at {datetime.datetime.now()}")
+            print(f"Successfully wrote ticker data for {ticker.inst_id} at {datetime.now()}")
         except Exception as e:
             print(f"Error writing ticker data: {e}")
             print(f"Problematic data: {ticker}")
@@ -118,7 +121,7 @@ async def create_connection_with_proxy(url, proxy):
 
 def get_timestamp():
     """获取当前时间戳"""
-    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
 async def subscribe_without_login(url, channels, proxy=None):
     # 创建数据库写入器
@@ -146,7 +149,7 @@ async def subscribe_without_login(url, channels, proxy=None):
                     
                     if msg.type == aiohttp.WSMsgType.TEXT:
                         data = msg.data
-                        print(f"{get_timestamp()} Received: {data}")
+                        #print(f"{get_timestamp()} Received: {data}")
                         
                         # 解析数据
                         ticker_data = json.loads(data)
@@ -192,7 +195,7 @@ if __name__ == "__main__":
     # 使用示例
     proxies = 'http://127.0.0.1:7890'
     url = "wss://ws.okx.com:8443/ws/v5/public"
-    channels = [{"channel": "tickers", "instId": "BTC-USDT"}]
+    channels = [{"channel": "tickers", "instId": "GRASS-USDT-SWAP"}]
 
     # 运行
     loop = asyncio.get_event_loop()
