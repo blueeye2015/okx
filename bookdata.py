@@ -49,7 +49,7 @@ class OrderBookInfluxWriter:
                         .tag("index", str(counter))  # 使用计数器作为唯一标识
                         .time(datetime.fromtimestamp(timestamp / 1000, tz=tz)))
                 points.append(point)
-                self.counter += 1  # 计数器递增
+                counter += 1  # 计数器递增
                 
             
             # 处理bids数据
@@ -62,7 +62,7 @@ class OrderBookInfluxWriter:
                         .tag("index", str(counter))  # 使用计数器作为唯一标识
                         .time(datetime.fromtimestamp(timestamp / 1000, tz=tz)))
                 points.append(point)
-                self.counter += 1  # 计数器递增
+                counter += 1  # 计数器递增
                  
             
             # 批量写入数据
