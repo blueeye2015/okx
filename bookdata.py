@@ -21,7 +21,7 @@ class OrderBookInfluxWriter:
         self.bucket = bucket
         self.org = org
         self.write_api = self.client.write_api()
-        self.counter = 0  # 添加一个计数器
+        
         
     def process_order_book(self, data: dict) -> None:
         """
@@ -40,25 +40,29 @@ class OrderBookInfluxWriter:
             points = []
             
             # 处理asks数据
+            counter = 0
             for ask in book_data['asks']:
                 point = (Point("asks")
                         .tag("instId", inst_id)
                         .field("price", float(ask[0]))
                         .field("amount", float(ask[1]))
-                        .tag("index", str(self.counter))  # 使用计数器作为唯一标识
+                        .tag("index", str(counter))  # 使用计数器作为唯一标识
                         .time(datetime.fromtimestamp(timestamp / 1000, tz=tz)))
                 points.append(point)
+                self.counter += 1  # 计数器递增
                 
             
             # 处理bids数据
+            counter = 0 #counter置零
             for bid in book_data['bids']:
                 point = (Point("bids")
                         .tag("instId", inst_id)
                         .field("price", float(bid[0]))
                         .field("amount", float(bid[1]))
-                        .tag("index", str(self.counter))  # 使用计数器作为唯一标识
+                        .tag("index", str(counter))  # 使用计数器作为唯一标识
                         .time(datetime.fromtimestamp(timestamp / 1000, tz=tz)))
                 points.append(point)
+                self.counter += 1  # 计数器递增
                  
             
             # 批量写入数据
