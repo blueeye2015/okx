@@ -41,28 +41,30 @@ class OrderBookInfluxWriter:
             
             # 处理asks数据
             counter = 0
-            for ask in book_data['asks']:
+            for i,ask in enumerate(book_data['asks'],1):
+                price, amount, _, _ = ask
                 point = (Point("asks")
                         .tag("instId", inst_id)
-                        .field("price", float(ask[0]))
-                        .field("amount", float(ask[1]))
-                        .tag("index", str(counter))  # 使用计数器作为唯一标识
+                        .field("price", float(price))
+                        .field("amount", float(amount))
+                        .tag("level", i)
                         .time(datetime.fromtimestamp(timestamp / 1000, tz=tz)))
                 points.append(point)
-                counter += 1  # 计数器递增
+                
                 
             
             # 处理bids数据
             counter = 0 #counter置零
-            for bid in book_data['bids']:
+            for i, bid in enumerate(book_data['bids'], 1):
+                price, amount, _, _ = bid
                 point = (Point("bids")
                         .tag("instId", inst_id)
-                        .field("price", float(bid[0]))
-                        .field("amount", float(bid[1]))
-                        .tag("index", str(counter))  # 使用计数器作为唯一标识
+                        .field("price", float(price))
+                        .field("amount", float(amount))
+                        .tag("level", i)
                         .time(datetime.fromtimestamp(timestamp / 1000, tz=tz)))
                 points.append(point)
-                counter += 1  # 计数器递增
+                
                  
             
             # 批量写入数据

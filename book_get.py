@@ -16,7 +16,7 @@ from bookdata import OrderBookInfluxWriter
  # 创建InfluxDB客户端
 client = InfluxDBClient(
         url = "http://localhost:8086",
-        token = "aEOL_HtGEGsMLtPp1KI3y0VA5L8MxRSAOWDXZh2TektZoizfZ5pGKPPLjSnBVxo9HQjND865WKN8ehFY-e7HOA==",
+        token = "DbMhzMDg_-aRXkH6O7auEposeogUdHhMrZSH5tq5z8VcnJNI3iFmaY0ZPzJAvM-MfdzhvdsjN5hzBB2GY3r81w==",
         org = "marketdata"
     )
 
