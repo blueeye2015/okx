@@ -102,3 +102,7 @@ CONTROL_TRANSFER = '/api/v5/asset/subaccount/transfer'
 
 # status
 STATUS = '/api/v5/system/status'
+
+# rubik
+TAKE_VOLUME = '/api/v5/rubik/stat/taker-volume'
+TAKE_VOLUME_CONTRACT = '/api/v5/rubik/stat/taker-volume-contract'
