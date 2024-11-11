@@ -68,15 +68,15 @@ if __name__ == '__main__':
                     #计算止盈价格，如果保证金低于50，止盈25% 5倍杠杆就是挂单价格*1.05，如果保证金低于100 止盈20% 挂单价格*1.04 如果是低于200 止盈15% 即挂单价格*1.03 如果是低于300 止盈10% 即挂单价格*1.02 其余挂单价格*1.01
                     if pos['side'] == 'buy':
                         #tpprice = price*0.99 if pos['side'] == 'sell' else price*1.01
-                        tpprice = price*1.05 if float(pos['margin']) <= 50 \
-                            else price*1.04 if float(pos['margin']) <= 100 \
-                            else price*1.03 if float(pos['margin']) <= 200 \
-                            else price*1.02 if float(pos['margin']) <= 300 else price*1.01
+                        tpprice = price*1.20 if float(pos['margin']) <= 50 \
+                            else price*1.15 if float(pos['margin']) <= 100 \
+                            else price*1.10 if float(pos['margin']) <= 200 \
+                            else price*1.05 
                     else:
-                        tpprice = price*0.95 if float(pos['margin']) <= 50 \
-                            else price*0.96 if float(pos['margin']) <= 100 \
-                            else price*0.97 if float(pos['margin']) <= 200 \
-                            else price*0.98 if float(pos['margin']) <= 300 else price*0.99
+                        tpprice = price*0.80 if float(pos['margin']) <= 50 \
+                            else price*0.85 if float(pos['margin']) <= 100 \
+                            else price*0.90 if float(pos['margin']) <= 200 \
+                            else price*0.95 
                     logging.info (f"price: {price} tpprice: {tpprice}")
                     if float(pos['margin'])<float(balance[0]['availBal']):
                         order_reslut = tradeAPI.place_order(instId=pos['symbol'], tdMode='isolated', side=pos['side'],

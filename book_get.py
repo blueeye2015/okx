@@ -16,7 +16,7 @@ from bookdata import OrderBookInfluxWriter
  # 创建InfluxDB客户端
 client = InfluxDBClient(
         url = "http://localhost:8086",
-        token = "DbMhzMDg_-aRXkH6O7auEposeogUdHhMrZSH5tq5z8VcnJNI3iFmaY0ZPzJAvM-MfdzhvdsjN5hzBB2GY3r81w==",
+        token = "aEOL_HtGEGsMLtPp1KI3y0VA5L8MxRSAOWDXZh2TektZoizfZ5pGKPPLjSnBVxo9HQjND865WKN8ehFY-e7HOA==",
         org = "marketdata"
     )
 
@@ -403,7 +403,9 @@ if __name__ == "__main__":
     # 使用示例
     proxies = 'http://127.0.0.1:7890'
     url = "wss://ws.okx.com:8443/ws/v5/public"
-    channels = [{"channel": "books", "instId": "BTC-USDT"}]
+    channels = [
+        {"channel": "books", "instId": "HMSTR-USDT"}
+    ]
 
     # 运行
     loop = asyncio.get_event_loop()
