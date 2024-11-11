@@ -5,6 +5,7 @@ import okex.Public_api as Public
 import okex.Trade_api as Trade
 import okex.subAccount_api as SubAccount
 import okex.status_api as Status
+import okex.rubik_api as rubik
 import json
 
 if __name__ == '__main__':
@@ -21,9 +22,9 @@ if __name__ == '__main__':
     flag = '0'  # 实盘
 
     # account api
-    accountAPI = Account.AccountAPI(api_key, secret_key, passphrase, False, flag, proxies)
+    #accountAPI = Account.AccountAPI(api_key, secret_key, passphrase, False, flag, proxies)
     # 查看账户余额  Get Balance
-    result = accountAPI.get_account('USDT')
+    #result = accountAPI.get_account('USDT')
     # 查看持仓信息  Get Positions
     #result = accountAPI.get_positions('SWAP', '')
     # 账单流水查询（近七天） Get Bills Details (recent 7 days)
@@ -199,7 +200,10 @@ if __name__ == '__main__':
     #Status = Status.StatusAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 查看系统的升级状态
     # result = Status.status()
-
-    print(json.dumps(result))
-    api= json.dumps(result)
-    api['data']
+    
+    #查看交易大数据
+    rubikapi = rubik.RubikApi(api_key, secret_key, passphrase, False, flag, proxies=proxies)
+    result = rubikapi.TAKE_VOLUME('BTC','SPOT')
+    #print(json.dumps(result))
+    api= json.loads(result)
+    
