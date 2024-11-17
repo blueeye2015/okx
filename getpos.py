@@ -80,7 +80,7 @@ if __name__ == '__main__':
                     logging.info (f"price: {price} tpprice: {tpprice}")
                     if float(pos['margin'])<float(balance[0]['availBal']):
                         order_reslut = tradeAPI.place_order(instId=pos['symbol'], tdMode='isolated', side=pos['side'],
-                                   ordType='limit', sz=abs(pos['size']), px = price, tpTriggerPx=tpprice,tpOrdPx=-1)
+                                   ordType='limit', sz=abs(pos['size']*2), px = price, tpTriggerPx=tpprice,tpOrdPx=-1)
                         logging.info(json.dumps(order_reslut))
                     else:
                         #保证金余额小于下单所需金额，把手上小单平了
