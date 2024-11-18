@@ -161,16 +161,25 @@ class DeltaNeutralStrategy:
             # 计算账户总价值（USDT）
             total_account_value = spot_usdt
             
+            # 需要排除的特殊字段
+            exclude_keys = {'info', 'timestamp', 'datetime', 'free', 'used', 'total', 'USDT'}
+        
             # 获取所有币种余额，计入总价值
             for currency in balance:
-                if currency != 'USDT' and currency != 'info':
-                    if balance[currency]['total'] > 0:
-                        try:
-                            currency_ticker = self.exchange.fetch_ticker(f'{currency}/USDT')
-                            currency_value = float(balance[currency]['total']) * currency_ticker['last']
-                            total_account_value += currency_value
-                        except:
-                            continue
+                if currency not in exclude_keys:  # 排除特殊字段
+                    try:
+                        if isinstance(balance[currency], dict) and balance[currency].get('total', 0) > 0:
+                            try:
+                                currency_ticker = self.exchange.fetch_ticker(f'{currency}/USDT')
+                                currency_value = float(balance[currency]['total']) * currency_ticker['last']
+                                total_account_value += currency_value
+                                print(f"计入 {currency} 价值: {currency_value} USDT")
+                            except Exception as e:
+                                print(f"计算 {currency} 价值时出错: {str(e)}")
+                                continue
+                    except Exception as e:
+                        print(f"处理币种 {currency} 时出错: {str(e)}")
+                        continue
 
             # 计算最大允许开仓金额（账户总值的10%）
             max_position_value = total_account_value * 0.1
