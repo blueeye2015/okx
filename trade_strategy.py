@@ -38,9 +38,9 @@ class DeltaNeutralStrategy:
         # self.exchange.set_sandbox_mode(True)
         
         # 策略参数
-        self.symbol = 'ETH/USDT'  # 交易对
-        self.inst_id_spot = 'ETH-USDT'  # OKX现货交易对格式
-        self.inst_id_swap = 'ETH-USDT-SWAP'  # OKX永续合约交易对格式
+        self.symbol = 'LOOKS/USDT'  # 交易对
+        self.inst_id_spot = 'LOOKS-USDT'  # OKX现货交易对格式
+        self.inst_id_swap = 'LOOKS-USDT-SWAP'  # OKX永续合约交易对格式
         self.base_position_size = 1.0  # 基础仓位大小
         self.profit_target = 0.015  # 止盈目标 1.5%
         self.stop_loss = 0.08  # 止损线 8%
@@ -237,7 +237,7 @@ class DeltaNeutralStrategy:
             # 先设置杠杆
             self.exchange.set_leverage(1, self.inst_id_swap, params={
                 'mgnMode': 'isolated',
-                'posSide': 'short'
+                'posSide': 'net'  # 添加 posSide 参数，设置为 'net'
             })
             
             futures_order = self.exchange.create_order(
@@ -247,8 +247,7 @@ class DeltaNeutralStrategy:
                 amount=position_size,
                 params={
                     'instId': self.inst_id_swap,
-                    'tdMode': 'isolated',
-                    'posSide': 'short'
+                    'tdMode': 'isolated'
                 }
             )
             
@@ -256,7 +255,7 @@ class DeltaNeutralStrategy:
             self.futures_position = -float(position_size)
             
             print(f"基础对冲仓位建立完成:")
-            print(f"现货订单: {spot_order}")
+            # print(f"现货订单: {spot_order}")
             print(f"合约订单: {futures_order}")
             print(f"现货持仓: {self.spot_position}, 合约持仓: {self.futures_position}")
             
