@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 import talib
 
-class DeltaNeutralStrategy:
+class DeltaNeutralStrategy():
     def __init__(self):
         # 代理设置
         proxies = {
@@ -38,9 +38,9 @@ class DeltaNeutralStrategy:
         # self.exchange.set_sandbox_mode(True)
         
         # 策略参数
-        self.symbol = 'LOOKS/USDT'  # 交易对
-        self.inst_id_spot = 'LOOKS-USDT'  # OKX现货交易对格式
-        self.inst_id_swap = 'LOOKS-USDT-SWAP'  # OKX永续合约交易对格式
+        self.symbol = 'HBAR/USDT'  # 交易对
+        self.inst_id_spot = 'HBAR-USDT'  # OKX现货交易对格式
+        self.inst_id_swap = 'HBAR-USDT-SWAP'  # OKX永续合约交易对格式
         self.base_position_size = 1.0  # 基础仓位大小
         self.profit_target = 0.015  # 止盈目标 1.5%
         self.stop_loss = 0.08  # 止损线 8%
@@ -143,7 +143,38 @@ class DeltaNeutralStrategy:
             
         return False, None
  
-
+    def get_contract_multiplier(self):
+        """获取合约最小下单单位"""
+        try:
+            # 尝试从API获取
+            markets = self.exchange.load_markets()
+            contract_market = markets[self.symbol]
+            
+            # 尝试从市场信息中获取合约乘数
+            multiplier = None
+            if 'contractSize' in contract_market:
+                multiplier = contract_market['contractSize']
+            elif 'lot' in contract_market:
+                multiplier = contract_market['lot']
+            
+            if multiplier is not None:
+                print(f"从API获取到{self.symbol}的合约乘数: {multiplier}")
+                return multiplier
+                
+            # 如果API没有提供，使用手动设置的值
+            if self.contract_size_multiplier is not None:
+                print(f"使用手动设置的{self.symbol}合约乘数: {self.contract_size_multiplier}")
+                return self.contract_size_multiplier
+                # 如果需要手动设置合约乘数
+            strategy.contract_size_multiplier = 100  # 对于HBAR设置为100
+            # 如果都没有，使用默认值1
+            print(f"未能获取{self.symbol}合约乘数，使用默认值: 1")
+            return 1
+        
+        except Exception as e:
+            print(f"获取合约乘数失败: {str(e)}")
+            # 如果出错，使用手动设置的值或默认值
+            return self.contract_size_multiplier or 1
 
     def calculate_position_size(self):
         """计算合适的开仓数量"""
@@ -158,52 +189,32 @@ class DeltaNeutralStrategy:
             ticker = self.exchange.fetch_ticker(self.symbol)
             current_price = ticker['last']
             
-            # 计算账户总价值（USDT）
-            total_account_value = spot_usdt
-            
-            # 需要排除的特殊字段
-            exclude_keys = {'info', 'timestamp', 'datetime', 'free', 'used', 'total', 'USDT'}
-        
-            # 获取所有币种余额，计入总价值
-            for currency in balance:
-                if currency not in exclude_keys:  # 排除特殊字段
-                    try:
-                        if isinstance(balance[currency], dict) and balance[currency].get('total', 0) > 0:
-                            try:
-                                currency_ticker = self.exchange.fetch_ticker(f'{currency}/USDT')
-                                currency_value = float(balance[currency]['total']) * currency_ticker['last']
-                                total_account_value += currency_value
-                                print(f"计入 {currency} 价值: {currency_value} USDT")
-                            except Exception as e:
-                                print(f"计算 {currency} 价值时出错: {str(e)}")
-                                continue
-                    except Exception as e:
-                        print(f"处理币种 {currency} 时出错: {str(e)}")
-                        continue
+            #计算最大允许开仓金额（账户总值的10%）
+            max_position_value = spot_usdt * 0.1
+            print(f"账户USDT余额: {spot_usdt}")
+            print(f"最大允许开仓金额: {max_position_value} USDT")     
 
-            # 计算最大允许开仓金额（账户总值的10%）
-            max_position_value = total_account_value * 0.1
+            # 计算现货可以开的数量
+            spot_size = max_position_value / current_price
             
-            # 计算实际可以开的仓位大小（以BTC数量表示）
-            possible_position_size = max_position_value / current_price
+            # 计算合约可以开的张数（向下取整到10的倍数）
+            # 由于合约一张=10个单位，所以需要除以10
+            contract_size = (spot_size // 10) * 10
             
-            # 考虑交易所最小交易量限制
-            markets = self.exchange.load_markets()
-            min_amount = markets[self.symbol]['limits']['amount']['min']
-            
-            # 如果可能的仓位小于最小交易量，返回0
-            if possible_position_size < min_amount:
-                print(f"可用资金不足最小交易量要求。最小交易量: {min_amount} BTC")
+            # 确保合约张数至少是10（欧易HBAR最小10张）
+            if contract_size < 10:
+                print("可用资金不足以开立最小合约仓位（10张）")
                 return 0
-                
-            # 根据交易所精度要求格式化数量
-            position_size = self.exchange.amount_to_precision(self.symbol, possible_position_size)
+                 
+            # 重新计算实际的现货数量，使其与合约数量匹配
+            spot_size = contract_size  # 现货数量等于合约张数对应的数量
+          
+            print(f"当前{self.symbol}价格: {current_price} USDT")
+            print(f"现货下单数量: {spot_size}")
+            print(f"合约下单张数: {contract_size/10} 张")  # 除以10显示实际张数
+            print(f"预计使用保证金: {spot_size * current_price} USDT")
             
-            print(f"账户总价值: {total_account_value} USDT")
-            print(f"最大允许开仓金额: {max_position_value} USDT")
-            print(f"计算得出的开仓数量: {position_size} BTC")
-            
-            return float(position_size)
+            return float(spot_size)
             
         except Exception as e:
             print(f"计算仓位大小时出错: {str(e)}")
@@ -219,19 +230,18 @@ class DeltaNeutralStrategy:
                 print("没有足够的资金开仓")
                 return False
                 
-            print(f"准备开仓，数量: {position_size} BTC")
             
-            # 现货买入
-            spot_order = self.exchange.create_order(
-                symbol=self.symbol,
-                type='market',
-                side='buy',
-                amount=position_size,
-                params={
-                    'instId': self.inst_id_spot,
-                    'tdMode': 'cash'
-                }
-            )
+            #现货买入
+            # spot_order = self.exchange.create_order(
+            #     symbol=self.symbol,
+            #     type='market',
+            #     side='buy',
+            #     amount=position_size,  # 使用调整后的数量
+            #     params={
+            #         'instId': self.inst_id_spot,
+            #         'tdMode': 'cash'
+            #     }
+            # )
             
             # 合约做空
             # 先设置杠杆
@@ -244,7 +254,7 @@ class DeltaNeutralStrategy:
                 symbol=self.symbol,
                 type='market',
                 side='sell',
-                amount=position_size,
+                amount=position_size/10,   # 使用调整后的数量
                 params={
                     'instId': self.inst_id_swap,
                     'tdMode': 'isolated'
@@ -350,6 +360,7 @@ class DeltaNeutralStrategy:
 if __name__ == "__main__":
     try:
         strategy = DeltaNeutralStrategy()
+        
         if strategy.test_connection():
             strategy.run()
         else:
