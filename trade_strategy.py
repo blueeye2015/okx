@@ -4,6 +4,7 @@ import numpy as np
 import time
 from datetime import datetime
 import talib
+import logging
 
 class DeltaNeutralStrategy():
     def __init__(self):
@@ -29,9 +30,9 @@ class DeltaNeutralStrategy():
         # 验证连接
         try:
             self.exchange.load_markets()
-            print("交易所连接成功")
+            logging.info("交易所连接成功")
         except Exception as e:
-            print(f"交易所连接失败: {str(e)}")
+            logging.info(f"交易所连接失败: {str(e)}")
             raise e
         
         # 设置为测试网（如果需要的话）
@@ -46,7 +47,7 @@ class DeltaNeutralStrategy():
         self.stop_loss = 0.08  # 止损线 8%
         self.max_position = 3  # 最大持仓倍数
         self.min_position = 1  # 最小持仓倍数
-        
+        self.contract_size_multiplier =None
         # 技术指标参数
         self.rsi_period = 14
         self.rsi_overbought = 70
@@ -67,15 +68,15 @@ class DeltaNeutralStrategy():
         try:
             # 测试市场数据获取
             ticker = self.exchange.fetch_ticker(self.symbol)
-            print(f"当前 {self.symbol} 价格: {ticker['last']}")
+            logging.info(f"当前 {self.symbol} 价格: {ticker['last']}")
             
             # 测试账户数据获取
             balance = self.exchange.fetch_balance()
-            print("账户连接正常")
+            logging.info("账户连接正常")
             
             return True
         except Exception as e:
-            print(f"连接测试失败: {str(e)}")
+            logging.info(f"连接测试失败: {str(e)}")
             return False
             
     def get_technical_indicators(self, timeframe='5m', limit=100):
@@ -121,7 +122,10 @@ class DeltaNeutralStrategy():
         macd_cross = indicators['macd'] > indicators['signal']
         # 价格接近布林带下轨
         price_near_lower = indicators['current_price'] < indicators['bb_lower'] * 1.01
-        
+        logging.info(f"RSI超卖,rsi：{indicators['rsi']},ris_oversold:{self.rsi_oversold}")
+        logging.info(f"快线在慢线上方,ma_fast：{indicators['ma_fast']},ma_slow:{indicators['ma_slow']}")
+        logging.info(f"MACD金叉：{indicators['macd']}，signal:{indicators['signal']}")
+        logging.info(f"价格接近布林带下轨,bb_lower：{indicators['bb_lower']},price:{indicators['current_price']}")
         return rsi_buy and ma_trend_up and macd_cross and price_near_lower
     
     def check_exit_conditions(self, indicators, entry_price):
@@ -158,21 +162,21 @@ class DeltaNeutralStrategy():
                 multiplier = contract_market['lot']
             
             if multiplier is not None:
-                print(f"从API获取到{self.symbol}的合约乘数: {multiplier}")
+                logging.info(f"从API获取到{self.symbol}的合约乘数: {multiplier}")
                 return multiplier
                 
             # 如果API没有提供，使用手动设置的值
             if self.contract_size_multiplier is not None:
-                print(f"使用手动设置的{self.symbol}合约乘数: {self.contract_size_multiplier}")
+                logging.info(f"使用手动设置的{self.symbol}合约乘数: {self.contract_size_multiplier}")
                 return self.contract_size_multiplier
                 # 如果需要手动设置合约乘数
             strategy.contract_size_multiplier = 100  # 对于HBAR设置为100
             # 如果都没有，使用默认值1
-            print(f"未能获取{self.symbol}合约乘数，使用默认值: 1")
+            logging.info(f"未能获取{self.symbol}合约乘数，使用默认值: 1")
             return 1
         
         except Exception as e:
-            print(f"获取合约乘数失败: {str(e)}")
+            logging.info(f"获取合约乘数失败: {str(e)}")
             # 如果出错，使用手动设置的值或默认值
             return self.contract_size_multiplier or 1
 
@@ -191,8 +195,8 @@ class DeltaNeutralStrategy():
             
             #计算最大允许开仓金额（账户总值的10%）
             max_position_value = spot_usdt * 0.1
-            print(f"账户USDT余额: {spot_usdt}")
-            print(f"最大允许开仓金额: {max_position_value} USDT")     
+            logging.info(f"账户USDT余额: {spot_usdt}")
+            logging.info(f"最大允许开仓金额: {max_position_value} USDT")     
 
             # 计算现货可以开的数量
             spot_size = max_position_value / current_price
@@ -209,15 +213,15 @@ class DeltaNeutralStrategy():
             # 重新计算实际的现货数量，使其与合约数量匹配
             spot_size = contract_size  # 现货数量等于合约张数对应的数量
           
-            print(f"当前{self.symbol}价格: {current_price} USDT")
-            print(f"现货下单数量: {spot_size}")
-            print(f"合约下单张数: {contract_size/10} 张")  # 除以10显示实际张数
-            print(f"预计使用保证金: {spot_size * current_price} USDT")
+            logging.info(f"当前{self.symbol}价格: {current_price} USDT")
+            logging.info(f"现货下单数量: {spot_size}")
+            logging.info(f"合约下单张数: {contract_size/10} 张")  # 除以10显示实际张数
+            logging.info(f"预计使用保证金: {spot_size * current_price} USDT")
             
             return float(spot_size)
             
         except Exception as e:
-            print(f"计算仓位大小时出错: {str(e)}")
+            logging.info(f"计算仓位大小时出错: {str(e)}")
             return 0
 
     def init_base_position(self):
@@ -227,7 +231,7 @@ class DeltaNeutralStrategy():
             position_size = self.calculate_position_size()
             
             if position_size <= 0:
-                print("没有足够的资金开仓")
+                logging.info("没有足够的资金开仓")
                 return False
                 
             
@@ -250,103 +254,104 @@ class DeltaNeutralStrategy():
                 'posSide': 'net'  # 添加 posSide 参数，设置为 'net'
             })
             
-            futures_order = self.exchange.create_order(
-                symbol=self.symbol,
-                type='market',
-                side='sell',
-                amount=position_size/10,   # 使用调整后的数量
-                params={
-                    'instId': self.inst_id_swap,
-                    'tdMode': 'isolated'
-                }
-            )
+            # futures_order = self.exchange.create_order(
+            #     symbol=self.symbol,
+            #     type='market',
+            #     side='sell',
+            #     amount=position_size/100,   # 使用调整后的数量
+            #     params={
+            #         'instId': self.inst_id_swap,
+            #         'tdMode': 'isolated'
+            #     }
+            # )
             
             self.spot_position = float(position_size)
             self.futures_position = -float(position_size)
             
-            print(f"基础对冲仓位建立完成:")
+            logging.info(f"基础对冲仓位建立完成:")
             # print(f"现货订单: {spot_order}")
-            print(f"合约订单: {futures_order}")
-            print(f"现货持仓: {self.spot_position}, 合约持仓: {self.futures_position}")
+            # print(f"合约订单: {futures_order}")
+            logging.info(f"现货持仓: {self.spot_position}, 合约持仓: {self.futures_position}")
             
             return True
             
         except Exception as e:
-            print(f"建立基础对冲仓位失败: {str(e)}")
+            logging.info(f"建立基础对冲仓位失败: {str(e)}")
             if hasattr(e, 'response'):
-                print(f"错误详情: {e.response}")
+                logging.info(f"错误详情: {e.response}")
             return False
 
     def execute_swing_trade(self):
         """执行高抛低吸交易"""
-        try:
-            # 计算当前可用的交易数量
-            trade_size = self.calculate_position_size()
-            if trade_size <= 0:
-                print("可用资金不足，暂停交易")
-                return
-                
-            # 获取技术指标
-            indicators = self.get_technical_indicators()
-            
-            # 检查是否可以增加新的交易仓位
-            if len(self.trading_positions) < (self.max_position - self.min_position):
-                if self.check_entry_conditions(indicators):
-                    # 执行买入
-                    entry_price = indicators['current_price']
+        while True:  # 添加无限循环
+            try:
+                # 计算当前可用的交易数量
+                trade_size = self.spot_position/10
+                if trade_size <= 0:
+                    logging.info("可用资金不足，暂停交易")
+                    return
                     
-                    order = self.exchange.create_order(
-                        symbol=self.symbol,
-                        type='market',
-                        side='buy',
-                        amount=trade_size,
-                        params={
-                            'instId': self.inst_id_spot,
-                            'tdMode': 'cash'
-                        }
-                    )
-                    
-                    self.trading_positions.append({
-                        'price': entry_price,
-                        'size': float(trade_size),
-                        'timestamp': datetime.now()
-                    })
-                    print(f"新增交易仓位: 价格{entry_price}, 数量{trade_size}")
+                # 获取技术指标
+                indicators = self.get_technical_indicators()
                 
-                # 检查现有仓位是否需要平仓
-                for pos in self.trading_positions[:]:  # 使用切片创建副本进行遍历
-                    should_exit, reason = self.check_exit_conditions(indicators, pos['price'])
-                    if should_exit:
-                        # 执行卖出
-                        order = self.exchange.create_market_sell_order(
-                            self.symbol,
-                            pos['size']
+                # 检查是否可以增加新的交易仓位
+                if len(self.trading_positions) < (self.max_position - self.min_position):
+                    if self.check_entry_conditions(indicators):
+                        # 执行买入
+                        entry_price = indicators['current_price']
+                        
+                        order = self.exchange.create_order(
+                            symbol=self.symbol,
+                            type='market',
+                            side='buy',
+                            amount=trade_size,
+                            params={
+                                'instId': self.inst_id_spot,
+                                'tdMode': 'cash'
+                            }
                         )
-                        profit = (indicators['current_price'] - pos['price']) * pos['size']
-                        self.trading_positions.remove(pos)
-                        print(f"平仓: 原因{reason}, 盈亏{profit}")
-                
-                # 风险检查
-                self.check_risk()
-                
-                # 休眠一段时间
-                time.sleep(10)  # 10秒检查一次
-                
-        except Exception as e:
-            print(f"交易执行错误: {str(e)}")
-            time.sleep(30)  # 出错后等待30秒
+                        logging.info(f"现货订单: {order}")
+                        self.trading_positions.append({
+                            'price': entry_price,
+                            'size': float(trade_size),
+                            'timestamp': datetime.now()
+                        })
+                        logging.info(f"新增交易仓位: 价格{entry_price}, 数量{trade_size}")
+                    
+                    # 检查现有仓位是否需要平仓
+                    for pos in self.trading_positions[:]:  # 使用切片创建副本进行遍历
+                        should_exit, reason = self.check_exit_conditions(indicators, pos['price'])
+                        if should_exit:
+                            # 执行卖出
+                            order = self.exchange.create_market_sell_order(
+                                self.symbol,
+                                pos['size']
+                            )
+                            profit = (indicators['current_price'] - pos['price']) * pos['size']
+                            self.trading_positions.remove(pos)
+                            logging.info(f"平仓: 原因{reason}, 盈亏{profit}")
+                    
+                    # 风险检查
+                    self.check_risk()
+                    
+                    # 休眠一段时间
+                    time.sleep(10)  # 10秒检查一次
+                    
+            except Exception as e:
+                logging.info(f"交易执行错误: {str(e)}")
+                time.sleep(30)  # 出错后等待30秒
     
     def check_risk(self):
         """风险检查"""
         # 检查总持仓是否符合预期
         total_spot = self.spot_position + sum(pos['size'] for pos in self.trading_positions)
         if abs(total_spot + self.futures_position) > 0.01:  # 允许0.01的误差
-            print("警告: 持仓不平衡，需要调整")
+            logging.info("警告: 持仓不平衡，需要调整")
         
         # 检查账户余额
         balance = self.exchange.fetch_balance()
         if balance['USDT']['free'] < 1000:  # 假设最低保证金要求
-            print("警告: 保证金不足")
+            logging.info("警告: 保证金不足")
     
     def run(self):
         """运行策略"""
@@ -358,12 +363,17 @@ class DeltaNeutralStrategy():
         self.execute_swing_trade()
 
 if __name__ == "__main__":
+    # 设置日志配置
+    logging.basicConfig(filename='trade_strategy.log', level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+    logging.info('脚本开始执行')
+
     try:
         strategy = DeltaNeutralStrategy()
         
         if strategy.test_connection():
             strategy.run()
         else:
-            print("连接测试失败，请检查网络和API配置")
+            logging.info("连接测试失败，请检查网络和API配置")
     except Exception as e:
-        print(f"程序启动失败: {str(e)}")
+        logging.info(f"程序启动失败: {str(e)}")
