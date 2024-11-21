@@ -8,9 +8,9 @@ import okex.status_api as Status
 import json
 
 if __name__ == '__main__':
-    api_key = ""
-    secret_key = ""
-    passphrase = ""
+    api_key = "ba7f444f-e83e-4dd1-8507-bf8dd9033cbc"
+    secret_key = "D5474EF76B0A7397BFD26B9656006480"
+    passphrase = "TgTB+pJoM!d20F"
     # 设置代理
     proxies = {
     'http': 'http://127.0.0.1:7890',
@@ -23,9 +23,9 @@ if __name__ == '__main__':
     # account api
     accountAPI = Account.AccountAPI(api_key, secret_key, passphrase, False, flag, proxies)
     # 查看账户余额  Get Balance
-    result = accountAPI.get_account('USDT')
+    #result = accountAPI.get_account('USDT')
     # 查看持仓信息  Get Positions
-    #result = accountAPI.get_positions('SWAP', '')
+    #result = accountAPI.get_positions('MARGIN', '')
     # 账单流水查询（近七天） Get Bills Details (recent 7 days)
     # result = accountAPI.get_bills_detail('FUTURES', 'BTC','cross')
     # 账单流水查询（近三个月） Get Bills Details (recent 3 months)
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     # 获取充值地址信息  Get Deposit Address
     # result = fundingAPI.get_deposit_address('')
     # 获取资金账户余额信息  Get Balance
-    # result = fundingAPI.get_balances('BTC')
+    #result = fundingAPI.get_balances('BTC')
     # 资金划转  Funds Transfer
     # result = fundingAPI.funds_transfer(ccy='', amt='', type='1', froms="", to="",subAcct='')
     # 提币  Withdrawal
@@ -201,5 +201,5 @@ if __name__ == '__main__':
     # result = Status.status()
 
     print(json.dumps(result))
-    api= json.dumps(result)
-    api['data']
+    #api= json.dumps(result)
+    #api['data']

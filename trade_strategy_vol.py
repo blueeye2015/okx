@@ -237,9 +237,9 @@ class DeltaNeutralStrategy():
     #     logging.info(f"价格接近布林带下轨,bb_lower：{indicators['bb_lower']},price:{indicators['current_price']}")
     #     return rsi_buy and ma_trend_up and macd_cross and price_near_lower
     
-    def check_exit_conditions(self, indicators, entry_price):
+    def check_exit_conditions(self, current_price ,entry_price):
         """检查出场条件"""
-        current_price = indicators['current_price']
+        #current_price = indicators['current_price']
         profit_pct = (current_price - entry_price) / entry_price
         
         # 止盈条件
@@ -248,11 +248,7 @@ class DeltaNeutralStrategy():
         
         # 止损条件
         if profit_pct <= -self.stop_loss:
-            return True, "STOP_LOSS"
-        
-        # RSI超买
-        if indicators['rsi'] > self.rsi_overbought:
-            return True, "RSI_OVERBOUGHT"
+            return True, "STOP_LOSS"    
             
         return False, None
  
@@ -301,10 +297,7 @@ class DeltaNeutralStrategy():
             # 获取当前BTC价格
             ticker = self.exchange.fetch_ticker(self.symbol)
             current_price = ticker['last']
-
-            #获取当前现货持仓
-            positions = self.exchange.fetch_positions([self.inst_id_spot])
-            
+          
             #计算最大允许开仓金额（账户总值的10%）
             
             logging.info(f"账户USDT余额: {spot_usdt}")
@@ -313,17 +306,11 @@ class DeltaNeutralStrategy():
             # 计算现货可以开的数量
             spot_size = self.step_value / current_price
             
-            # 计算合约可以开的张数（向下取整到10的倍数）
-            # 由于合约一张=10个单位，所以需要除以10
-            #contract_size = (spot_size // 10) * 10
-            
-            # 确保合约张数至少是10（欧易HBAR最小10张）
-            #if contract_size < 10:
-            #    print("可用资金不足以开立最小合约仓位（10张）")
-            #    return 0
-                 
-            # 重新计算实际的现货数量，使其与合约数量匹配
-            #spot_size = contract_size  # 现货数量等于合约张数对应的数量
+            #获取现货持仓总价值
+            current_holding = sum(float(pos['contracts']) for pos in positions 
+                               if pos['symbol'] == self.symbol)
+
+
           
             logging.info(f"当前{self.symbol}价格: {current_price} USDT")
             logging.info(f"现货下单数量: {spot_size}")
@@ -361,10 +348,10 @@ class DeltaNeutralStrategy():
             
             # 合约做空
             # 先设置杠杆
-            self.exchange.set_leverage(1, self.inst_id_swap, params={
-                'mgnMode': 'isolated',
-                'posSide': 'net'  # 添加 posSide 参数，设置为 'net'
-            })
+            # self.exchange.set_leverage(1, self.inst_id_swap, params={
+            #     'mgnMode': 'isolated',
+            #     'posSide': 'net'  # 添加 posSide 参数，设置为 'net'
+            # })
             
             # futures_order = self.exchange.create_order(
             #     symbol=self.symbol,
@@ -378,10 +365,10 @@ class DeltaNeutralStrategy():
             # )
             
             self.spot_position = float(position_size)
-            self.futures_position = -float(position_size)
+            #self.futures_position = -float(position_size)
             
             # logging.info(f"基础对冲仓位建立完成:")
-            # print(f"现货订单: {spot_order}")
+            logging.info(f"现货订单: {spot_order}")
             # print(f"合约订单: {futures_order}")
             logging.info(f"现货持仓: {self.spot_position}")
             
@@ -437,17 +424,17 @@ class DeltaNeutralStrategy():
                         logging.info(f"新增交易仓位: 价格{ticker['last']}, 数量{positions}")
                     
                     # # 检查现有仓位是否需要平仓
-                    # for pos in self.trading_positions[:]:  # 使用切片创建副本进行遍历
-                    #     should_exit, reason = self.check_exit_conditions(indicators, pos['price'])
-                    #     if should_exit:
-                    #         # 执行卖出
-                    #         order = self.exchange.create_market_sell_order(
-                    #             self.symbol,
-                    #             pos['size']
-                    #         )
-                    #         profit = (indicators['current_price'] - pos['price']) * pos['size']
-                    #         self.trading_positions.remove(pos)
-                    #         logging.info(f"平仓: 原因{reason}, 盈亏{profit}")
+                    for pos in self.trading_positions[:]:  # 使用切片创建副本进行遍历
+                        should_exit, reason = self.check_exit_conditions(ticker['last'],pos['price'])
+                        if should_exit:
+                            # 执行卖出
+                            order = self.exchange.create_market_sell_order(
+                                self.symbol,
+                                pos['size']
+                            )
+                            profit = (ticker['last'] - pos['price']) * pos['size']
+                            self.trading_positions.remove(pos)
+                            logging.info(f"平仓: 原因{reason}, 盈亏{profit}")
                     
                     # 风险检查
                     self.check_risk()
