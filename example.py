@@ -21,7 +21,7 @@ if __name__ == '__main__':
     flag = '0'  # 实盘
 
     # account api
-    accountAPI = Account.AccountAPI(api_key, secret_key, passphrase, False, flag, proxies)
+    #accountAPI = Account.AccountAPI(api_key, secret_key, passphrase, False, flag, proxies)
     # 查看账户余额  Get Balance
     #result = accountAPI.get_account('USDT')
     # 查看持仓信息  Get Positions
@@ -77,11 +77,11 @@ if __name__ == '__main__':
     # result = fundingAPI.get_bills('USDT', '130')
 
     # market api
-    #marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
+    marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 获取所有产品行情信息  Get Tickers
-    # result = marketAPI.get_tickers('SPOT')
+    #result = marketAPI.get_tickers('SPOT')
     # 获取单个产品行情信息  Get Ticker
-    # result = marketAPI.get_ticker('BTC-USDT')
+    result = marketAPI.get_ticker('ETH-BTC')
     # 获取指数行情  Get Index Tickers
     # result = marketAPI.get_index_ticker('BTC', 'BTC-USD')
     # 获取产品深度  Get Order Book

@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 import talib
 import logging
+import math
 
 class DeltaNeutralStrategy():
     def __init__(self):
@@ -46,7 +47,7 @@ class DeltaNeutralStrategy():
         self.profit_target = 0.015  # 止盈目标 1.5%
         self.stop_loss = 0.08  # 止损线 8%
         self.max_value = 100 #最大持仓金额
-        self.step_value = 10 #每次开仓金额
+        self.step_value = 4 #每次开仓金额
         #self.max_position = 100  # 最大持仓
         #self.min_position = 1  # 最小持仓倍数
         #self.contract_size_multiplier =None
@@ -103,7 +104,9 @@ class DeltaNeutralStrategy():
             
             # 计算净流入
             net_flow = buy_volume - sell_volume
-            
+
+            logging.info(f"buy_volume:{buy_volume},sell_volume:{sell_volume},buy_sell_ratio:{buy_sell_ratio},net_flow:{net_flow}")
+
             return {
                 'buy_volume': buy_volume,
                 'sell_volume': sell_volume,
@@ -111,7 +114,7 @@ class DeltaNeutralStrategy():
                 'net_flow': net_flow
             }
         except Exception as e:
-            print(f"分析交易流向时出错: {str(e)}")
+            logging.info(f"分析交易流向时出错: {str(e)}")
             return None
 
     def detect_large_orders(self, threshold_multiplier=3):
@@ -138,6 +141,8 @@ class DeltaNeutralStrategy():
             # 计算大单比率
             large_buy_ratio = len(large_buys) / len(large_trades) if len(large_trades) > 0 else 0
             
+            logging.info(f"avg_trade_size:{avg_trade_size},large_buys:{len(large_buys)},large_trades:{len(large_trades)},large_buy_ratio:{large_buy_ratio}")
+            
             return {
                 'large_buy_ratio': large_buy_ratio,
                 'large_buys_count': len(large_buys),
@@ -146,7 +151,7 @@ class DeltaNeutralStrategy():
                 'avg_large_sell_size': large_sells['amount'].mean() if not large_sells.empty else 0
             }
         except Exception as e:
-            print(f"检测大单时出错: {str(e)}")
+            logging.info(f"检测大单时出错: {str(e)}")
             return None
 
     def calculate_cvd(self):
@@ -171,13 +176,15 @@ class DeltaNeutralStrategy():
             recent_cvd = df['cvd'].iloc[-1]
             cvd_ma = df['cvd'].rolling(window=20).mean().iloc[-1]
             
+            logging.info(f"recent_cvd:{recent_cvd},cvd_ma:{cvd_ma}")
+
             return {
                 'current_cvd': recent_cvd,
                 'cvd_ma': cvd_ma,
                 'trend': 'bullish' if recent_cvd > cvd_ma else 'bearish'
             }
         except Exception as e:
-            print(f"计算CVD时出错: {str(e)}")
+            logging.info(f"计算CVD时出错: {str(e)}")
             return None
 
     def generate_trade_signals(self):
@@ -211,31 +218,43 @@ class DeltaNeutralStrategy():
                 score += 1
             else:
                 score -= 1
-                
+
+            logging.info(f"买卖压力评分: {trade_flow['buy_sell_ratio']}，大单评分：{large_orders['large_buy_ratio']}，CVD趋势评分：{cvd_data['trend']}")
+
             return {
                 'score': score,
                 'signal': 'buy' if score > 1 else 'sell' if score < -1 else 'neutral',
                 'strength': abs(score)
             }
         except Exception as e:
-            print(f"生成交易信号时出错: {str(e)}")
+            logging.info(f"生成交易信号时出错: {str(e)}")
             return None
    
-    # def check_entry_conditions(self, indicators):
-    #     """检查入场条件"""
-    #     # RSI超卖
-    #     rsi_buy = indicators['rsi'] < self.rsi_oversold
-    #     # 快线在慢线上方
-    #     ma_trend_up = indicators['ma_fast'] > indicators['ma_slow']
-    #     # MACD金叉
-    #     macd_cross = indicators['macd'] > indicators['signal']
-    #     # 价格接近布林带下轨
-    #     price_near_lower = indicators['current_price'] < indicators['bb_lower'] * 1.01
-    #     logging.info(f"RSI超卖,rsi：{indicators['rsi']},ris_oversold:{self.rsi_oversold}")
-    #     logging.info(f"快线在慢线上方,ma_fast：{indicators['ma_fast']},ma_slow:{indicators['ma_slow']}")
-    #     logging.info(f"MACD金叉：{indicators['macd']}，signal:{indicators['signal']}")
-    #     logging.info(f"价格接近布林带下轨,bb_lower：{indicators['bb_lower']},price:{indicators['current_price']}")
-    #     return rsi_buy and ma_trend_up and macd_cross and price_near_lower
+    def check_price_pullback(self, current_price):
+        """检测价格回撤"""
+        try:
+            # 获取历史数据
+            ohlcv = self.exchange.fetch_ohlcv(self.symbol, '15m', limit=100)
+            df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            
+            # 计算最近的高点
+            recent_high = df['high'].rolling(window=20).max().iloc[-1]
+            
+            # 计算从高点的回撤百分比
+            pullback = (recent_high - current_price) / recent_high
+            
+            logging.info(f"pullback:{pullback},recent_high:{recent_high},current_price:{current_price}")
+
+            # 如果回撤小于2%，可能不是好的买入点
+            if pullback < 0.02:
+                return False, "INSUFFICIENT_PULLBACK"
+                
+            return True, None
+            
+        except Exception as e:
+            logging.error(f"检测价格回撤时出错: {str(e)}")
+            return False, "ERROR"
+
     
     def check_exit_conditions(self, current_price ,entry_price):
         """检查出场条件"""
@@ -252,38 +271,33 @@ class DeltaNeutralStrategy():
             
         return False, None
  
-    # def get_contract_multiplier(self):
-    #     """获取合约最小下单单位"""
-    #     try:
-    #         # 尝试从API获取
-    #         markets = self.exchange.load_markets()
-    #         contract_market = markets[self.symbol]
+    def analyze_cost_distribution(self):
+        """分析成本分布"""
+        try:
+            # 获取最近的成交记录
+            trades = self.exchange.fetch_trades(self.symbol, limit=1000)
+            df = pd.DataFrame([{
+                'price': trade['price'],
+                'amount': trade['amount']
+            } for trade in trades])
             
-    #         # 尝试从市场信息中获取合约乘数
-    #         multiplier = None
-    #         if 'contractSize' in contract_market:
-    #             multiplier = contract_market['contractSize']
-    #         elif 'lot' in contract_market:
-    #             multiplier = contract_market['lot']
+            # 计算成交量加权平均价格（VWAP）
+            vwap = (df['price'] * df['amount']).sum() / df['amount'].sum()
             
-    #         if multiplier is not None:
-    #             logging.info(f"从API获取到{self.symbol}的合约乘数: {multiplier}")
-    #             return multiplier
+            # 如果当前价格显著高于VWAP，可能不是好的买入点
+            current_price = self.exchange.fetch_ticker(self.symbol)['last']
+
+            logging.info(f"vwap:{vwap},current_price:{current_price}")
+
+            if current_price > vwap * 1.02:  # 价格超过VWAP 2%
+                return False, "PRICE_ABOVE_VWAP"
                 
-    #         # 如果API没有提供，使用手动设置的值
-    #         if self.contract_size_multiplier is not None:
-    #             logging.info(f"使用手动设置的{self.symbol}合约乘数: {self.contract_size_multiplier}")
-    #             return self.contract_size_multiplier
-    #             # 如果需要手动设置合约乘数
-    #         strategy.contract_size_multiplier = 100  # 对于HBAR设置为100
-    #         # 如果都没有，使用默认值1
-    #         logging.info(f"未能获取{self.symbol}合约乘数，使用默认值: 1")
-    #         return 1
-        
-    #     except Exception as e:
-    #         logging.info(f"获取合约乘数失败: {str(e)}")
-    #         # 如果出错，使用手动设置的值或默认值
-    #         return self.contract_size_multiplier or 1
+            return True, None
+            
+        except Exception as e:
+            logging.error(f"分析成本分布时出错: {str(e)}")
+            return False, "ERROR"
+
 
     def calculate_position_size(self):
         """计算合适的开仓数量"""
@@ -294,57 +308,160 @@ class DeltaNeutralStrategy():
             # 获取现货账户USDT余额
             spot_usdt = float(balance['USDT']['free'])
             
-            # 获取当前BTC价格
-            ticker = self.exchange.fetch_ticker(self.symbol)
-            current_price = ticker['last']
+            # 获取最新订单簿价格
+            orderbook_prices = self.get_orderbook_mid_price()
+            if not orderbook_prices:
+                return 0, 0
           
-            #计算最大允许开仓金额（账户总值的10%）
+            current_price = orderbook_prices['best_ask']  # 使用卖一价格计算，这样更保守
+
+            # 添加安全边际，预留一些余额防止价格波动
+            safety_margin = 1.02  # 预留2%的安全边际
+            estimated_price = current_price * safety_margin
             
             logging.info(f"账户USDT余额: {spot_usdt}")
-            #logging.info(f"最大允许开仓金额: {max_position_value} USDT")     
+            # 计算最大可买数量，考虑手续费
+            fee_rate = 0.0008  # 挂单手续费0.08%
+            total_cost_ratio = 1 + fee_rate
 
             # 计算现货可以开的数量
-            spot_size = self.step_value / current_price
+            max_position = (self.step_value / estimated_price) / total_cost_ratio
             
+            # 向下取整到适当的小数位
+            position = math.floor(max_position * 10000) / 10000  # 保留4位小数
             #获取现货持仓总价值
-            current_holding = sum(float(pos['contracts']) for pos in positions 
-                               if pos['symbol'] == self.symbol)
+            positions = balance['info']['data'][0]['details']
+            symbol_value = sum(float(pos['eqUsd']) for pos in positions
+                               if pos['ccy'] == str(self.symbol).replace('/USDT',''))
 
 
           
             logging.info(f"当前{self.symbol}价格: {current_price} USDT")
-            logging.info(f"现货下单数量: {spot_size}")
-            #logging.info(f"合约下单张数: {contract_size/10} 张")  # 除以10显示实际张数
-            logging.info(f"预计使用保证金: {spot_size * current_price} USDT")
+            logging.info(f"现货下单数量: {position}")
+            logging.info(f"现货已持仓金额: {symbol_value} ")  # 除以10显示实际张数
+            logging.info(f"预计使用保证金: {position * current_price} USDT")
             
-            return float(spot_size),spot_usdt
+            return position,spot_usdt,symbol_value,current_price
             
         except Exception as e:
             logging.info(f"计算仓位大小时出错: {str(e)}")
             return 0
 
+    def get_orderbook_mid_price(self):
+        """获取订单簿买一卖一中间价"""
+        try:
+            orderbook = self.exchange.fetch_order_book(self.symbol)
+            best_bid = orderbook['bids'][0][0] if len(orderbook['bids']) > 0 else None
+            best_ask = orderbook['asks'][0][0] if len(orderbook['asks']) > 0 else None
+            
+            if best_bid is None or best_ask is None:
+                return None
+                
+            mid_price = (best_bid + best_ask) / 2
+            return {
+                'mid_price': mid_price,
+                'best_bid': best_bid,
+                'best_ask': best_ask
+            }
+        except Exception as e:
+            logging.error(f"获取订单簿价格时出错: {str(e)}")
+            return None
+        
+    def get_position(self, symbol):
+        """获取当前持仓数量"""
+        try:
+            balance = self.exchange.fetch_balance()
+            # 获取币种名称（例如从 'BTC/USDT' 中获取 'BTC'）
+            currency = symbol.split('/')[0]
+            available = float(balance[currency]['free'])
+            return available
+        except Exception as e:
+            logging.error(f"获取持仓数量时出错: {str(e)}")
+            return 0
+    
+    def place_limit_order(self, side, amount, price):
+        """
+        下限价单并等待成交
+        side: 'buy' 或 'sell'
+        amount: 交易数量
+        price: 限价价格
+        """
+        try:
+            if side == 'sell':
+                available_position = self.get_position(self.symbol)
+                if available_position < amount:
+                    logging.warning(f"可用仓位不足，需要 {amount}，实际 {available_position}")
+                    # 清空trading_positions列表，因为当前仓位已经不足以执行任何卖出指令
+                    self.trading_positions.clear()
+                    return False, None
+                
+            # 下限价单
+            order = self.exchange.create_order(
+                symbol=self.symbol,
+                type='limit',
+                side=side,
+                amount=amount,
+                price=price,
+                params={
+                    'instId': self.inst_id_spot,
+                    'tdMode': 'cash',
+                    'timeInForce': 'GTC'  # Good Till Cancel
+                }
+            )
+            
+            order_id = order['id']
+            start_time = time.time()
+            
+            # 等待订单成交或超时
+            while time.time() - start_time < 1:  # 1秒超时
+                # 检查订单状态
+                order_status = self.exchange.fetch_order(order_id, self.symbol)
+                
+                if order_status['status'] == 'closed':
+                    logging.info(f"订单已成交: {order_id}")
+                    if side == 'sell':
+                        # 卖出成功后清空trading_positions
+                        self.trading_positions.clear()
+                    return True, order
+                    
+                time.sleep(0.1)  # 短暂休眠，避免频繁查询
+                
+            # 超时取消订单
+            try:
+                self.exchange.cancel_order(order_id, self.symbol)
+                logging.info(f"订单超时已取消: {order_id}")
+            except Exception as e:
+                logging.error(f"取消订单时出错: {str(e)}")
+                
+            return False, None
+            
+        except Exception as e:
+            logging.error(f"下限价单时出错: {str(e)}")
+            return False, None
+
+
     def init_base_position(self):
         """初始化基础对冲仓位"""
         try:
             # 计算合适的开仓数量
-            position_size, balance = self.calculate_position_size()
+            #position_size, balance,symbol_value = self.calculate_position_size()
             
-            if position_size <= 0:
-                logging.info("没有足够的资金开仓")
-                return False
+            # if position_size <= 0:
+            #     logging.info("没有足够的资金开仓")
+            #     return False
                 
             
             #现货买入
-            spot_order = self.exchange.create_order(
-                symbol=self.symbol,
-                type='market',
-                side='buy',
-                amount=position_size,  # 使用调整后的数量
-                params={
-                    'instId': self.inst_id_spot,
-                    'tdMode': 'cash'
-                }
-            )
+            # spot_order = self.exchange.create_order(
+            #     symbol=self.symbol,
+            #     type='market',
+            #     side='buy',
+            #     amount=position_size,  # 使用调整后的数量
+            #     params={
+            #         'instId': self.inst_id_spot,
+            #         'tdMode': 'cash'
+            #     }
+            # )
             
             # 合约做空
             # 先设置杠杆
@@ -364,13 +481,13 @@ class DeltaNeutralStrategy():
             #     }
             # )
             
-            self.spot_position = float(position_size)
+            #self.spot_position = float(position_size)
             #self.futures_position = -float(position_size)
             
             # logging.info(f"基础对冲仓位建立完成:")
-            logging.info(f"现货订单: {spot_order}")
+            #logging.info(f"现货订单: {spot_order}")
             # print(f"合约订单: {futures_order}")
-            logging.info(f"现货持仓: {self.spot_position}")
+            #logging.info(f"现货持仓: {self.spot_position}")
             
             return True
             
@@ -391,56 +508,136 @@ class DeltaNeutralStrategy():
                 
                 # 计算当前可用的交易数量
                 # 获取当前持仓
-                positions,balance = self.calculate_position_size()
+                positions,balance,symbol_value,current_price = self.calculate_position_size()
                 if positions <= 0:
                     logging.info("可用资金不足，暂停交易")
                     return
                 
                 # 检查是否可以增加新的交易仓位
                 # 根据信号执行交易
+                logging.info(f"买入信号执行:{signals['signal']},数量={positions}, 强度={signals['strength']}")
                 if signals['signal'] == 'buy' and signals['strength'] >= 2:
+                    
+                    # 检查价格回撤
+                    pullback_ok, pullback_reason = self.check_price_pullback(current_price)
+                    if not pullback_ok:
+                        logging.info(f"价格回撤不足: {pullback_reason}")
+                        continue
+                    
+                    # 检查成本分布
+                    cost_ok, cost_reason = self.analyze_cost_distribution()
+                    if not cost_ok:
+                        logging.info(f"成本分布不适合: {cost_reason}")
+                        continue
                     # 检查是否有足够的USDT
                     ticker = self.exchange.fetch_ticker(self.symbol)
                     required_usdt = positions * ticker['last']
                     
-                    if balance >= required_usdt:
-                        order = self.exchange.create_order(
-                            symbol=self.symbol,
-                            type='market',
-                            side='buy',
-                            amount=positions,
-                            params={
-                                'instId': self.inst_id_spot,
-                                'tdMode': 'cash'
-                            }
-                        )
-                        print(f"买入信号执行: 数量={positions}, 强度={signals['strength']}")
-                        logging.info(f"现货订单: {order}")
-                        self.trading_positions.append({
-                            'price': ticker['last'],
+                    if balance >= required_usdt and symbol_value<=self.max_value:
+                        max_attempts = 3  # 最大重试次数
+                        attempt = 0
+
+                        while attempt < max_attempts:
+                            # 重新获取订单簿价格
+                            fresh_prices = self.get_orderbook_mid_price()
+                            if not fresh_prices:
+                                break
+                                
+                            # 下限价买单
+                            success, order = self.place_limit_order(
+                                'buy',
+                                positions,
+                                fresh_prices['mid_price']
+                            )
+                            
+                            if success:
+                                self.trading_positions.append({
+                                    'price': fresh_prices['mid_price'],
+                                    'size': float(positions),
+                                    'timestamp': datetime.now()
+                                })
+                                break
+                        
+                            attempt += 1
+                            if attempt < max_attempts:
+                                logging.info(f"重试下单，第{attempt}次")
+                                time.sleep(0.5)  # 等待半秒后重试
+
+                            logging.info(f"现货订单: {order}，success:{success}")
+                            logging.info(f"新增交易仓位: 价格{fresh_prices['mid_price']}, 数量{positions}")
+
+                            self.trading_positions.append({
+                            'price': fresh_prices['mid_price'],
                             'size': float(positions),
                             'timestamp': datetime.now()
-                        })
-                        logging.info(f"新增交易仓位: 价格{ticker['last']}, 数量{positions}")
-                    
-                    # # 检查现有仓位是否需要平仓
-                    for pos in self.trading_positions[:]:  # 使用切片创建副本进行遍历
-                        should_exit, reason = self.check_exit_conditions(ticker['last'],pos['price'])
-                        if should_exit:
-                            # 执行卖出
-                            order = self.exchange.create_market_sell_order(
-                                self.symbol,
-                                pos['size']
-                            )
-                            profit = (ticker['last'] - pos['price']) * pos['size']
-                            self.trading_positions.remove(pos)
-                            logging.info(f"平仓: 原因{reason}, 盈亏{profit}")
-                    
+                            })
+
+
+                        # order = self.exchange.create_order(
+                        #     symbol=self.symbol,
+                        #     type='market',
+                        #     side='buy',
+                        #     amount=positions,
+                        #     params={
+                        #         'instId': self.inst_id_spot,
+                        #         'tdMode': 'cash'
+                        #     }
+                        # )
+                    else:
+                        logging.info(f"新增交易仓位: 价格{ticker['last']}, 数量{positions},剩余金额：{balance}，现货金额：{symbol_value}")    
+                                           
                     # 风险检查
-                    self.check_risk()
-                    
+                    #self.check_risk()
+                # # 检查现有仓位是否需要平仓
+                for pos in self.trading_positions[:]:  # 使用切片创建副本进行遍历
+                    should_exit, reason = self.check_exit_conditions(ticker['last'],pos['price'])
+                    if should_exit:
+                        max_attempts = 3
+                        attempt = 0
+                        while attempt < max_attempts:
+                            fresh_prices = self.get_orderbook_mid_price()
+                            if not fresh_prices:
+                                break
+
+                            success, order = self.place_limit_order(
+                            'sell',
+                            pos['size'],
+                            fresh_prices['mid_price']
+                            )
+
+                            if success:
+                                profit = (fresh_prices['mid_price'] - pos['price']) * pos['size']
+                                self.trading_positions.remove(pos)
+                                logging.info(f"平仓: 原因{reason}, 盈亏{profit}")
+                                break
+                            
+                            if success:
+                                logging.info(f"成功卖出 {pos['size']} 个币种，价格 {order_price}")
+                                break
+                            elif not self.trading_positions:  # 如果trading_positions已被清空，说明仓位不足
+                                logging.info("仓位不足，终止卖出尝试")
+                                break
+                            
+                            # 如果失败但仍有仓位，重新获取价格并重试
+                            fresh_prices = self.get_orderbook_mid_price()
+                            if fresh_prices:
+                                order_price = self.calculate_order_price('sell', fresh_prices['mid_price'])
+
+                        attempt += 1
+                        if attempt < max_attempts:
+                            logging.info(f"重试卖出，第{attempt}次")
+                            time.sleep(0.5)
+                        # 执行卖出
+                        # order = self.exchange.create_market_sell_order(
+                        #     self.symbol,
+                        #     pos['size']
+                        # )
+                        # profit = (ticker['last'] - pos['price']) * pos['size']
+                        # self.trading_positions.remove(pos)
+                        # logging.info(f"平仓: 原因{reason}, 盈亏{profit}")    
                     # 休眠一段时间
-                    time.sleep(10)  # 10秒检查一次
+                logging.info(f"trading_positions:{self.trading_positions}")
+                time.sleep(60)  # 10秒检查一次
                     
             except Exception as e:
                 logging.info(f"交易执行错误: {str(e)}")
@@ -475,9 +672,9 @@ if __name__ == "__main__":
 
     try:
         strategy = DeltaNeutralStrategy()
-        strategy.symbol = 'ETH/USDT'
-        strategy.inst_id_spot = 'ETH-USDT'
-        strategy.inst_id_swap = 'ETH-USDT-SWAP'
+        strategy.symbol = 'MOVR-USDT'
+        strategy.inst_id_spot = 'MOVR-USDT'
+        strategy.inst_id_swap = 'MOVE-USDT-SWAP'
         if strategy.test_connection():
             strategy.run()
         else:
