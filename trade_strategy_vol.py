@@ -6,6 +6,7 @@ from datetime import datetime
 import talib
 import logging
 import math
+import argparse
 
 class DeltaNeutralStrategy():
     def __init__(self):
@@ -44,7 +45,7 @@ class DeltaNeutralStrategy():
         self.inst_id_spot = None # OKX现货交易对格式
         self.inst_id_swap = None  # OKX永续合约交易对格式
         self.base_position_size = 1.0  # 基础仓位大小
-        self.profit_target = 0.015  # 止盈目标 1.5%
+        self.profit_target = 0.0095  # 止盈目标 1.5%
         self.stop_loss = 0.08  # 止损线 8%
         self.max_value = 100 #最大持仓金额
         self.step_value = 4 #每次开仓金额
@@ -332,7 +333,7 @@ class DeltaNeutralStrategy():
             #获取现货持仓总价值
             positions = balance['info']['data'][0]['details']
             symbol_value = sum(float(pos['eqUsd']) for pos in positions
-                               if pos['ccy'] == str(self.symbol).replace('/USDT',''))
+                               if pos['ccy'] == str(self.symbol).replace('-USDT',''))
 
 
           
@@ -612,16 +613,16 @@ class DeltaNeutralStrategy():
                                 break
                             
                             if success:
-                                logging.info(f"成功卖出 {pos['size']} 个币种，价格 {order_price}")
+                                logging.info(f"成功卖出 {pos['size']} 个币种，价格 {fresh_prices['mid_price']}")
                                 break
                             elif not self.trading_positions:  # 如果trading_positions已被清空，说明仓位不足
                                 logging.info("仓位不足，终止卖出尝试")
                                 break
                             
-                            # 如果失败但仍有仓位，重新获取价格并重试
-                            fresh_prices = self.get_orderbook_mid_price()
-                            if fresh_prices:
-                                order_price = self.calculate_order_price('sell', fresh_prices['mid_price'])
+                            # # 如果失败但仍有仓位，重新获取价格并重试
+                            # fresh_prices = self.get_orderbook_mid_price()
+                            # if fresh_prices:
+                            #     order_price = self.calculate_order_price('sell', fresh_prices['mid_price'])
 
                         attempt += 1
                         if attempt < max_attempts:
@@ -665,16 +666,25 @@ class DeltaNeutralStrategy():
         self.execute_swing_trade()
 
 if __name__ == "__main__":
+    
+
+    # 创建解析器
+    parser = argparse.ArgumentParser(description="trade_inst")
+    parser.add_argument('symbol', type=str, help='币名')
+    # 解析参数
+    args = parser.parse_args()
+
+
     # 设置日志配置
-    logging.basicConfig(filename='trade_strategy.log', level=logging.INFO,
+    logging.basicConfig(filename=f'{args.symbol}_rade_strategy.log', level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
     logging.info('脚本开始执行')
 
     try:
         strategy = DeltaNeutralStrategy()
-        strategy.symbol = 'MOVR-USDT'
-        strategy.inst_id_spot = 'MOVR-USDT'
-        strategy.inst_id_swap = 'MOVE-USDT-SWAP'
+        strategy.symbol = args.symbol
+        strategy.inst_id_spot = args.symbol
+        
         if strategy.test_connection():
             strategy.run()
         else:
