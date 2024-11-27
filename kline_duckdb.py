@@ -7,6 +7,50 @@ from typing import Optional, List, Dict
 from dataclasses import dataclass
 import logging
 from abc import ABC, abstractmethod
+import ccxt
+import requests
+
+# 1. 添加交易所基类
+class ExchangeBase:
+    _instance = None
+    _exchange = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(ExchangeBase, cls).__new__(cls)
+        return cls._instance
+    
+    @property
+    def exchange(self) -> ccxt.Exchange:
+        
+        proxies = {
+            'http': 'http://127.0.0.1:7890',  # 根据您的实际代理地址修改
+            'https': 'http://127.0.0.1:7890'  # 根据您的实际代理地址修改
+            }
+        if self._exchange is None:
+            self._exchange = ccxt.okx({
+            'apiKey': 'ba7f444f-e83e-4dd1-8507-bf8dd9033cbc',
+            'secret': 'D5474EF76B0A7397BFD26B9656006480',
+            'password': 'TgTB+pJoM!d20F',
+            'enableRateLimit': True,
+            'proxies': proxies,  # 添加代理设置
+            'timeout': 30000,    # 设置超时时间为30秒
+            'options': {
+                'defaultType': 'spot',
+                'adjustForTimeDifference': True
+            }
+            })
+        try:
+            self.exchange.load_markets()
+            logging.info("交易所连接成功")
+        except Exception as e:
+            logging.info(f"交易所连接失败: {str(e)}")
+            raise e
+        return self._exchange
+    
+    def close(self):
+        if self._exchange:
+            self._exchange = None
 
 # 1. 配置管理
 @dataclass
@@ -15,10 +59,17 @@ class DBConfig:
     read_only: bool = False
     
 class Config:
-    DB_PATH = "D:/docker/duckdb/market_data.duckdb"
-    SYMBOLS = ["BTC-USDT", "ETH-USDT"]  # 交易对列表
+    DB_PATH = "D:/duckdb/market_data.duckdb"
     INTERVAL = "1m"  # K线间隔
     BATCH_SIZE = 1000  # 批量插入大小
+
+    def __init__(self):
+            self.market_analyzer = MarketAnalyzer()
+            self.update_symbols()
+        
+    def update_symbols(self):
+            self.SYMBOLS = self.market_analyzer.get_valid_symbols()
+            logging.info(f"更新交易对列表，共 {len(self.SYMBOLS)} 个")
 
 # 2. 数据模型
 @dataclass
@@ -184,8 +235,46 @@ class KlineDAO(BaseDAO):
         return self.query(symbol, start_time, end_time)
 
 # 6. 业务逻辑层
-class MarketDataService:
+class ExchangeBase:
+    _instance = None
+    _exchange = None
+    
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(ExchangeBase, cls).__new__(cls)
+        return cls._instance
+    
+    @property
+    def exchange(self) -> ccxt.Exchange:
+        # 代理设置
+        proxies = {
+            'http': 'http://127.0.0.1:7890',  # 根据您的实际代理地址修改
+            'https': 'http://127.0.0.1:7890'  # 根据您的实际代理地址修改
+        }
+        
+        # 初始化交易所API（这里以binance为例）
+        if self._exchange is None:
+            self._exchange = ccxt.okx({
+            'apiKey': 'ba7f444f-e83e-4dd1-8507-bf8dd9033cbc',
+            'secret': 'D5474EF76B0A7397BFD26B9656006480',
+            'password': 'TgTB+pJoM!d20F',
+            'enableRateLimit': True,
+            'proxies': proxies,  # 添加代理设置
+            'timeout': 30000,    # 设置超时时间为30秒
+            'options': {
+                'defaultType': 'spot',
+                'adjustForTimeDifference': True
+            }
+            })
+        return self._exchange
+    
+    def close(self):
+        if self._exchange:
+            self._exchange = None
+
+class MarketDataService(ExchangeBase):
     def __init__(self, config: Config):
+        super().__init__() 
         self.config = config
         self.db_manager = DatabaseManager(DBConfig(config.DB_PATH))
         self.kline_dao = KlineDAO(self.db_manager)
@@ -194,26 +283,34 @@ class MarketDataService:
     def fetch_klines(self, symbol: str, start_time: datetime) -> List[Kline]:
         """
         从交易所获取K线数据
-        这里需要实现具体的数据获取逻辑
-        """
-        # 示例数据，实际应用中需要替换为真实的API调用
+        """           
+            # 将时间转换为毫秒时间戳
+        since = int(start_time.timestamp() * 1000)
+            
+            # 获取K线数据
+        ohlcv = self.exchange.fetch_ohlcv(
+            symbol,  # 将 BTC-USDT 转换为 BTC/USDT
+            timeframe='1m',
+            since=since,
+            limit=1000
+        )
+            
+        # 转换为 Kline 对象列表
         klines = []
-        current_time = start_time
-        
-        for i in range(10):  # 示例生成10个K线
+        for data in ohlcv:
+            timestamp = datetime.fromtimestamp(data[0] / 1000)  # 转换毫秒时间戳为datetime
             kline = Kline(
                 symbol=symbol,
-                timestamp=current_time,
-                open=100 + i,
-                high=102 + i,
-                low=98 + i,
-                close=101 + i,
-                volume=1000 + i
+                timestamp=timestamp,
+                open=float(data[1]),
+                high=float(data[2]),
+                low=float(data[3]),
+                close=float(data[4]),
+                volume=float(data[5])
             )
             klines.append(kline)
-            current_time += timedelta(minutes=1)
-            
-        return klines
+                
+        return klines        
     
     def update_market_data(self):
         """更新所有交易对的市场数据"""
@@ -232,61 +329,135 @@ class MarketDataService:
                 # 批量保存
                 if new_klines:
                     self.kline_dao.insert_batch(new_klines)
-                    logging.info(f"Updated {len(new_klines)} klines for {symbol}")
+                    logging.info(f"更新了 {symbol} 的 {len(new_klines)} 条K线数据")
+                    
+                # 添加适当的延迟以遵守API限制
+                time.sleep(1)  # 根据实际需要调整延迟时间
                     
             except Exception as e:
-                logging.error(f"Error updating {symbol}: {str(e)}")
+                logging.error(f"更新 {symbol} 时出错: {str(e)}")
+
+class MarketAnalyzer(ExchangeBase):
+    def __init__(self):
+        self.cache = {}
+        self.cache_timeout = 3600  # 缓存1小时   
+        self.proxies = {
+            'http': 'http://127.0.0.1:7890',  # 根据你的实际代理地址修改
+            'https': 'http://127.0.0.1:7890'  # 根据你的实际代理地址修改
+        } 
+                    
+    def get_market_cap_data(self) -> Dict[str, float]:
+        """
+        从 CoinGecko 获取市值数据
+        返回格式: {'BTC': 800000000000, 'ETH': 200000000000, ...}
+        """
+        try:
+            url = "https://api.coingecko.com/api/v3/coins/markets"
+            params = {
+                'vs_currency': 'usd',
+                'order': 'market_cap_desc',
+                'per_page': 250,  # 获取前250个币种
+                'page': 1,
+                'sparkline': False
+            }
+            response = requests.get(url,proxies=self.proxies, params=params)
+            data = response.json()
+            
+            return {
+                item['symbol'].upper(): {
+                    'market_cap': item['market_cap'],
+                    'first_listed': item.get('genesis_date')  # 上市日期
+                }
+                for item in data if item['market_cap'] is not None
+            }
+        except Exception as e:
+            logging.error(f"获取市值数据失败: {str(e)}")
+            return {}
+
+    def get_valid_symbols(self, min_market_cap: float = 20000000, min_age_months: int = 1) -> List[str]:
+        """
+        获取符合条件的交易对
+        :param min_market_cap: 最小市值（美元）
+        :param min_age_months: 最小上市月数
+        :return: 符合条件的交易对列表
+        """
+        try:
+            # 获取交易所支持的所有交易对
+            markets = self.exchange.load_markets()
+            
+            # 获取市值数据
+            market_cap_data = self.get_market_cap_data()
+            
+            # 当前时间
+            current_time = datetime.now()
+            min_list_date = current_time - timedelta(days=30 * min_age_months)
+            
+            valid_symbols = []
+            
+            for symbol, market in markets.items():
+                try:
+                    # 只考虑USDT交易对
+                    if not symbol.endswith('/USDT'):
+                        continue
+                        
+                    base_currency = market['base']  # 基础货币 (例如 BTC, ETH)
+                    
+                    # 检查是否有市值数据
+                    if base_currency not in market_cap_data:
+                        continue
+                        
+                    market_info = market_cap_data[base_currency]
+                    
+                    # 检查市值
+                    if market_info['market_cap'] < min_market_cap:
+                        continue
+                        
+                    # 检查上市时间
+                    if market_info['first_listed']:
+                        list_date = datetime.strptime(market_info['first_listed'], '%Y-%m-%d')
+                        if list_date > min_list_date:
+                            continue
+                            
+                    # 将交易所格式转换为我们的格式 (BTC/USDT -> BTC-USDT)
+                    formatted_symbol = symbol.replace('/', '-')
+                    valid_symbols.append(formatted_symbol)
+                    
+                except Exception as e:
+                    logging.warning(f"处理交易对 {symbol} 时出错: {str(e)}")
+                    continue
+            
+            logging.info(f"找到 {len(valid_symbols)} 个符合条件的交易对")
+            return valid_symbols
+            
+        except Exception as e:
+            logging.error(f"获取有效交易对时出错: {str(e)}")
+            return []
+        
 
 def main():
-    # 设置日志
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
     
-    # 创建服务实例
     config = Config()
     market_service = MarketDataService(config)
     
-    # 测试数据访问
-    symbol = "BTC-USDT"
-    kline = Kline(
-        symbol=symbol,
-        timestamp=datetime.now(),
-        open=50000.0,
-        high=51000.0,
-        low=49000.0,
-        close=50500.0,
-        volume=1000.0
-    )
-    
-    # 测试单条插入
-    market_service.kline_dao.insert(kline)
-    
-    # 测试查询
-    start_time = datetime.now() - timedelta(days=1)
-    end_time = datetime.now()
-    klines = market_service.kline_dao.query(
-        symbol=symbol,
-        start_time=start_time,
-        end_time=end_time
-    )
-    
-    logging.info(f"Found {len(klines)} klines for {symbol}")
-    
-    # 运行数据更新循环
     while True:
         try:
+            # 每天更新一次交易对列表
+            if datetime.now().hour == 0 and datetime.now().minute == 0:
+                config.update_symbols()
+            
             market_service.update_market_data()
-            time.sleep(60)  # 每分钟更新一次
+            time.sleep(60)
             
         except KeyboardInterrupt:
-            logging.info("Stopping market data service...")
+            logging.info("程序正在退出...")
             break
-            
         except Exception as e:
-            logging.error(f"Error in main loop: {str(e)}")
-            time.sleep(5)  # 发生错误时等待5秒后重试
+            logging.error(f"发生错误: {str(e)}")
+            time.sleep(60)
 
 if __name__ == "__main__":
     main()
