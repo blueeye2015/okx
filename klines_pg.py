@@ -9,7 +9,7 @@ import logging
 from abc import ABC, abstractmethod
 import ccxt
 import requests
-# 首先添加必要的导入
+## 首先添加必要的导入
 import sqlalchemy as sa
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.dialects.postgresql import insert
