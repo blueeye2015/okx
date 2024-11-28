@@ -14,6 +14,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 # 1. 添加交易所基类
@@ -21,7 +22,7 @@ class ExchangeBase:
     _instance = None
     _exchange = None
     
-    def __new__(cls):
+    def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super(ExchangeBase, cls).__new__(cls)
         return cls._instance
@@ -233,33 +234,23 @@ class KlineDAO(BaseDAO):
         finally:
             session.close()
     
-    def insert_batch(self, klines: List[Kline]):
-        """批量插入数据"""
+    def save_klines(self, kline_models: List[KlineModel]):
         session = self.db_manager.get_session()
         try:
-            kline_models = [
-                KlineModel(
-                    symbol=k.symbol,
-                    timestamp=k.timestamp,
-                    open=k.open,
-                    high=k.high,
-                    low=k.low,
-                    close=k.close,
-                    volume=k.volume
-                ) for k in klines
-            ]
+            # 创建 insert 语句
+            stmt = insert(KlineModel)
+            # 准备插入的数据
+            values = [vars(model) for model in kline_models]
             
-            # 使用PostgreSQL的upsert功能
-            stmt = insert(KlineModel).values(
-                [vars(model) for model in kline_models]
-            ).on_conflict_do_update(
+            # 创建 on conflict do update 语句
+            stmt = stmt.values(values).on_conflict_do_update(
                 index_elements=['symbol', 'timestamp'],
                 set_={
-                    'open': sa.excluded.open,
-                    'high': sa.excluded.high,
-                    'low': sa.excluded.low,
-                    'close': sa.excluded.close,
-                    'volume': sa.excluded.volume
+                    'open': stmt.excluded.open,
+                    'high': stmt.excluded.high,
+                    'low': stmt.excluded.low,
+                    'close': stmt.excluded.close,
+                    'volume': stmt.excluded.volume
                 }
             )
             
@@ -271,6 +262,29 @@ class KlineDAO(BaseDAO):
         finally:
             session.close()
     
+
+    def get_latest_kline(self, symbol: str) -> Optional[Kline]:
+        """获取指定交易对的最新K线数据（同步方式）"""
+        session = self.db_manager.get_session()
+        try:
+            query = session.query(KlineModel)
+            query = query.filter(KlineModel.symbol == symbol)
+            query = query.order_by(KlineModel.timestamp.desc()).first()
+            
+            if query:
+                return Kline(
+                    symbol=query.symbol,
+                    timestamp=query.timestamp,
+                    open=query.open,
+                    high=query.high,
+                    low=query.low,
+                    close=query.close,
+                    volume=query.volume
+                )
+            return None
+        finally:
+            session.close()
+
     def query(self, symbol: str = None, 
               start_time: datetime = None, 
               end_time: datetime = None) -> List[Kline]:
@@ -303,31 +317,29 @@ class KlineDAO(BaseDAO):
             session.close()
 
 # 6. 添加索引创建函数
-def create_indexes(engine):
-    """创建必要的索引"""
-    with engine.connect() as conn:
-        # 创建symbol和timestamp的联合索引
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_klines_symbol_timestamp 
-            ON klines (symbol, timestamp)
-        """)
+# def create_indexes(engine):
+#     """创建必要的索引"""
+#     with engine.connect() as conn:
+#         # 创建symbol和timestamp的联合索引
+#         conn.execute("""
+#             CREATE INDEX IF NOT EXISTS idx_klines_symbol_timestamp 
+#             ON klines (symbol, timestamp)
+#         """)
         
-        # 创建timestamp索引用于范围查询
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_klines_timestamp 
-            ON klines (timestamp)
-        """)
+#         # 创建timestamp索引用于范围查询
+#         conn.execute("""
+#             CREATE INDEX IF NOT EXISTS idx_klines_timestamp 
+#             ON klines (timestamp)
+#         """)
 
 
 
 # 6. 业务逻辑层
-
-
 class MarketDataService(ExchangeBase):
     def __init__(self, config: Config):
         super().__init__() 
         self.config = config
-        self.db_manager = DatabaseManager(DBConfig(config.DB_PATH))
+        self.db_manager = DatabaseManager(config.DB_CONFIG)
         self.kline_dao = KlineDAO(self.db_manager)
         self.kline_dao.create_table()
         
@@ -379,7 +391,7 @@ class MarketDataService(ExchangeBase):
                 
                 # 批量保存
                 if new_klines:
-                    self.kline_dao.insert_batch(new_klines)
+                    self.kline_dao.save_klines(new_klines)
                     logging.info(f"更新了 {symbol} 的 {len(new_klines)} 条K线数据")
                     
                 # 添加适当的延迟以遵守API限制
@@ -493,7 +505,7 @@ def main():
     
     config = Config()
     db_manager = DatabaseManager(config.DB_CONFIG)
-    create_indexes(db_manager._engine)
+    # create_indexes(db_manager._engine)
     
     market_service = MarketDataService(config)
     
