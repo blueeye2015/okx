@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import time
 
-from ..exchange import ExchangeBase
+from exchange.base import ExchangeBase
 
 class MarketAnalyzer(ExchangeBase):
     """

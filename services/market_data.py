@@ -3,10 +3,11 @@ import time
 from datetime import datetime, timedelta
 from typing import List
 
-from exchange import ExchangeBase
-from config import Config
-from database import DatabaseManager, KlineDAO
-from models import Kline
+from exchange.base import ExchangeBase
+from config.settings import Config
+from database.dao  import KlineDAO
+from database.manager import DatabaseManager
+from models.kline import Kline
 
 class MarketDataService(ExchangeBase):
     """

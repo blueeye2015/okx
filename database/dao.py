@@ -21,6 +21,41 @@ class BaseDAO(ABC):
 class KlineDAO(BaseDAO):
     def create_table(self):
         pass
+    
+    def insert(self, kline: Kline):
+        """插入单条数据"""
+        session = self.db_manager.get_session()
+        try:
+            kline_model = KlineModel(
+                symbol=kline.symbol,
+                timestamp=kline.timestamp,
+                open=kline.open,
+                high=kline.high,
+                low=kline.low,
+                close=kline.close,
+                volume=kline.volume
+            )
+            
+            stmt = insert(KlineModel).values(
+                vars(kline_model)
+            ).on_conflict_do_update(
+                index_elements=['symbol', 'timestamp'],
+                set_={
+                    'open': kline_model.open,
+                    'high': kline_model.high,
+                    'low': kline_model.low,
+                    'close': kline_model.close,
+                    'volume': kline_model.volume
+                }
+            )
+            
+            session.execute(stmt)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
 
     def save_klines(self, kline_models: List[Kline]):
         session = self.db_manager.get_session()

@@ -22,9 +22,9 @@ class ExchangeBase:
             'https': 'http://127.0.0.1:7890'
         }
         return ccxt.okx({
-            'apiKey': 'your-api-key',
-            'secret': 'your-secret',
-            'password': 'your-password',
+            'apiKey': 'ba7f444f-e83e-4dd1-8507-bf8dd9033cbc',
+            'secret': 'D5474EF76B0A7397BFD26B9656006480',
+            'password': 'TgTB+pJoM!d20F',
             'enableRateLimit': True,
             'proxies': proxies,
             'timeout': 30000,
