@@ -87,7 +87,7 @@ class MarketDataService(ExchangeBase):
                 logging.error(f"获取 {symbol} K线数据失败: {e}")
                 raise
         
-    def update_single_symbol(self, symbol: str) -> None:
+    async def update_single_symbol(self, symbol: str) -> None:
         """
         更新单个交易对的市场数据
         
@@ -96,7 +96,7 @@ class MarketDataService(ExchangeBase):
         """
         try:
             # 获取最新的K线数据
-            latest_kline = self.kline_dao.get_latest_kline(symbol)
+            latest_kline = await self.kline_dao.get_latest_kline(symbol)
             
             # 如果没有历史数据，则从1000分钟前开始获取
             start_time = datetime.now() - timedelta(minutes=1000)
@@ -105,26 +105,28 @@ class MarketDataService(ExchangeBase):
                 start_time = latest_kline.timestamp + timedelta(minutes=1)
             
             # 获取新数据
-            new_klines = self.fetch_klines(symbol, start_time)
+            new_klines = await self.fetch_klines(symbol, start_time)
             
             # 批量保存
             if new_klines:
-                self.kline_dao.save_klines(new_klines)
+                await self.kline_dao.save_klines(new_klines)
                 logging.info(f"更新了 {symbol} 的 {len(new_klines)} 条K线数据")
                 
         except Exception as e:
             logging.error(f"更新 {symbol} 时出错: {str(e)}")
             raise
     
-    def update_market_data(self) -> None:
+    async def update_market_data(self) -> None:
         """
         更新所有交易对的市场数据
         """
+        tasks = []
         for symbol in self.config.SYMBOLS:
             try:
-                self.update_single_symbol(symbol)
+                task = asyncio.create_task(self.update_single_symbol(symbol))
+                tasks.append(task)               
                 # 添加适当的延迟以遵守API限制
-                time.sleep(1)  # 根据实际需要调整延迟时间
+                #time.sleep(1)  # 根据实际需要调整延迟时间
                     
             except Exception as e:
                 logging.error(f"更新 {symbol} 时出错: {str(e)}")

@@ -110,7 +110,7 @@ class MarketAnalyzer(ExchangeBase):
                 return self.cache
             return {}
 
-    def get_valid_symbols(self, min_market_cap: float = 20000000, min_age_months: int = 1) -> List[str]:
+    def get_valid_symbols(self, min_market_cap: float = 1000000000, min_age_months: int = 1) -> List[str]:
         """
         获取符合条件的交易对
         

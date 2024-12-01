@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from config.settings import DBConfig
 from database.models import Base
@@ -16,15 +16,18 @@ class DatabaseManager:
         return cls._instance
     
     def _init_db(self):
-        url = f"postgresql://{self.config.user}:{self.config.password}@{self.config.host}:{self.config.port}/{self.config.database}"
-        self._engine = create_engine(url, pool_size=5, max_overflow=10)
-        self._session_factory = sessionmaker(bind=self._engine)
-        Base.metadata.create_all(self._engine)
+        url = f"postgresql+asyncpg://{self.config.user}:{self.config.password}@{self.config.host}:{self.config.port}/{self.config.database}"
+        self._engine = create_async_engine(url, pool_size=150, max_overflow=10)
+        self.async_session = sessionmaker(            
+            self._engine, 
+            class_=AsyncSession, 
+            expire_on_commit=False)
+        
     
     def get_session(self):
-        return self._session_factory()
+        return self.async_session()
     
-    def close(self):
+    async def close(self):
         if self._engine:
             self._engine.dispose()
             self._engine = None
