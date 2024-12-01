@@ -1,7 +1,8 @@
 import logging
 import time
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Dict, Tuple
+import asyncio
 
 from exchange.base import ExchangeBase
 from config.settings import Config
@@ -27,6 +28,7 @@ class MarketDataService(ExchangeBase):
         self.db_manager = DatabaseManager(config.DB_CONFIG)
         self.kline_dao = KlineDAO(self.db_manager)
         self._init_database()
+        self.semaphore = asyncio.Semaphore(10)  # 限制并发请求数
         
     def _init_database(self) -> None:
         """初始化数据库表"""
@@ -37,7 +39,7 @@ class MarketDataService(ExchangeBase):
             logging.error(f"数据库表初始化失败: {e}")
             raise
         
-    def fetch_klines(self, symbol: str, start_time: datetime) -> List[Kline]:
+    async def fetch_klines(self, symbol: str, start_time: datetime) -> List[Kline]:
         """
         从交易所获取K线数据
         
@@ -51,38 +53,39 @@ class MarketDataService(ExchangeBase):
         Raises:
             Exception: 当获取数据失败时抛出异常
         """
-        try:
-            # 将时间转换为毫秒时间戳
-            since = int(start_time.timestamp() * 1000)
-            
-            # 将交易对格式转换为交易所要求的格式（BTC-USDT -> BTC/USDT）
-            exchange_symbol = symbol.replace('-', '/')
-            
-            # 获取K线数据
-            ohlcv = self.exchange.fetch_ohlcv(
-                exchange_symbol,
-                timeframe=self.config.INTERVAL,
-                since=since,
-                limit=self.config.BATCH_SIZE
-            )
-            
-            # 转换为 Kline 对象列表
-            return [
-                Kline(
-                    symbol=symbol,
-                    timestamp=datetime.fromtimestamp(data[0] / 1000),
-                    open=float(data[1]),
-                    high=float(data[2]),
-                    low=float(data[3]),
-                    close=float(data[4]),
-                    volume=float(data[5])
-                )
-                for data in ohlcv
-            ]
+        async with self.semaphore:  # 使用信号量控制并发
+            try:
+                # 将时间转换为毫秒时间戳
+                since = int(start_time.timestamp() * 1000)
                 
-        except Exception as e:
-            logging.error(f"获取 {symbol} K线数据失败: {e}")
-            raise
+                # 将交易对格式转换为交易所要求的格式（BTC-USDT -> BTC/USDT）
+                exchange_symbol = symbol.replace('-', '/')
+                
+                # 获取K线数据
+                ohlcv = self.exchange.fetch_ohlcv(
+                    exchange_symbol,
+                    timeframe=self.config.INTERVAL,
+                    since=since,
+                    limit=self.config.BATCH_SIZE
+                )
+                
+                # 转换为 Kline 对象列表
+                return [
+                    Kline(
+                        symbol=symbol,
+                        timestamp=datetime.fromtimestamp(data[0] / 1000),
+                        open=float(data[1]),
+                        high=float(data[2]),
+                        low=float(data[3]),
+                        close=float(data[4]),
+                        volume=float(data[5])
+                    )
+                    for data in ohlcv
+                ]
+                    
+            except Exception as e:
+                logging.error(f"获取 {symbol} K线数据失败: {e}")
+                raise
         
     def update_single_symbol(self, symbol: str) -> None:
         """

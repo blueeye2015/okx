@@ -56,7 +56,7 @@ if __name__ == '__main__':
             logging.info("------------------------")
 
             #如果收益率>=-30%,补一次，但要判断是否已经存在一样的委托
-            if float(pos['uplRatio'])<=-0.4 or pos['mgnRatio']< 2.9:
+            if (float(pos['uplRatio'])<=-0.4 or pos['mgnRatio']< 2.9) and pos['leverage']<=10:
                 #获取该合约未完成订单
                 result1 = tradeAPI.get_order_list(instType='SWAP',instId=pos['symbol'])
                 orderlist = parse_orderlist(json.dumps(result1))
@@ -85,15 +85,29 @@ if __name__ == '__main__':
                     else:
                         #保证金余额小于下单所需金额，把手上小单平了
                         raise SpecialJumpException("保证金过少")
-            elif float(pos['uplRatio'])>=-0.3 and float(pos['uplRatio'])<=0:
-                #判断收益率如果大于-30%，则取消未完成订单
+            elif pos['leverage']>10 and pos['margin']<50: #如果是高杠杆直接挂单
                 #获取该合约未完成订单
                 result1 = tradeAPI.get_order_list(instType='SWAP',instId=pos['symbol'])
                 orderlist = parse_orderlist(json.dumps(result1))
-                logging.info (f"{pos['symbol']} 的{pos['side']}订单,收益率 :{pos['uplRatio']} ")
-                for order in orderlist:
-                    order_reslut = tradeAPI.cancel_order(instId=pos['symbol'], ordId=order['ordId'])
-                    logging.info (f"{order['symbol']} 的{order['side']}订单 ordid :{order['ordId']} 撤销")
+                if not orderlist:
+                    #计算强平价格
+                    price = float(pos['liquidation_price'])*(1-0.013) if pos['side'] == 'sell' else float(pos['liquidation_price'])*(1+0.013)
+                    order_reslut = tradeAPI.place_order(instId=pos['symbol'], tdMode='isolated', side=pos['side'],
+                                    ordType='limit', sz=abs(pos['size']), px = price)
+            elif float(pos['uplRatio'])<-0.3 and pos['margin']>100:
+                #大于25的如果亏损超过30%就止损
+                order_reslut = tradeAPI.place_order(instId=pos['symbol'], side='sell' if pos['side'] == 'buy' else 'buy',
+                                   ordType='market', sz=abs(pos['size']), px = price)
+                
+            # elif float(pos['uplRatio'])>=-0.3 and float(pos['uplRatio'])<=0:
+            #     #判断收益率如果大于-30%，则取消未完成订单
+            #     #获取该合约未完成订单
+            #     result1 = tradeAPI.get_order_list(instType='SWAP',instId=pos['symbol'])
+            #     orderlist = parse_orderlist(json.dumps(result1))
+            #     logging.info (f"{pos['symbol']} 的{pos['side']}订单,收益率 :{pos['uplRatio']} ")
+            #     for order in orderlist:
+            #         order_reslut = tradeAPI.cancel_order(instId=pos['symbol'], ordId=order['ordId'])
+            #         logging.info (f"{order['symbol']} 的{order['side']}订单 ordid :{order['ordId']} 撤销")
     except Exception as e:
         logging.info(f"Error: {e}")
     except SpecialJumpException as e:

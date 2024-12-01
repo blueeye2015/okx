@@ -81,19 +81,19 @@ if __name__ == '__main__':
     # 获取所有产品行情信息  Get Tickers
     #result = marketAPI.get_tickers('SPOT')
     # 获取单个产品行情信息  Get Ticker
-    result = marketAPI.get_ticker('ETH-BTC')
+    #result = marketAPI.get_ticker('ETH-BTC')
     # 获取指数行情  Get Index Tickers
     # result = marketAPI.get_index_ticker('BTC', 'BTC-USD')
     # 获取产品深度  Get Order Book
     # result = marketAPI.get_orderbook('BTC-USDT-210402', '400')
     # 获取所有交易产品K线数据  Get Candlesticks
-    # result = marketAPI.get_candlesticks('BTC-USDT-210924', bar='1m')
+    result = marketAPI.get_candlesticks('ACT-USDT', bar='1m')
     # 获取交易产品历史K线数据（仅主流币实盘数据）  Get Candlesticks History（top currencies in real-trading only）
     # result = marketAPI.get_history_candlesticks('BTC-USDT')
     # 获取指数K线数据  Get Index Candlesticks
     # result = marketAPI.get_index_candlesticks('BTC-USDT')
     # 获取标记价格K线数据  Get Mark Price Candlesticks
-    # result = marketAPI.get_markprice_candlesticks('BTC-USDT')
+    #result = marketAPI.get_markprice_candlesticks('NEIRO-USDT',limit=1000,bar='1m')
     # 获取交易产品公共成交数据  Get Trades
     # result = marketAPI.get_trades('BTC-USDT', '400')
     #result = marketAPI.history_trades('BTC-USDT',limit='10',type=1)
