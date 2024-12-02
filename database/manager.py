@@ -17,7 +17,13 @@ class DatabaseManager:
     
     def _init_db(self):
         url = f"postgresql+asyncpg://{self.config.user}:{self.config.password}@{self.config.host}:{self.config.port}/{self.config.database}"
-        self._engine = create_async_engine(url, pool_size=150, max_overflow=10)
+        self._engine = create_async_engine(
+            url, 
+            pool_size=100,               # 增加连接池大小
+            pool_pre_ping=True,         # 自动检查连接是否有效
+            pool_timeout=30,            # 连接超时时间
+            pool_recycle=1800          # 连接回收时间
+            )
         self.async_session = sessionmaker(            
             self._engine, 
             class_=AsyncSession, 

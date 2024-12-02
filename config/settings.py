@@ -17,7 +17,7 @@ class Config:
         password="12"
     )
     INTERVAL = "1m"
-    BATCH_SIZE = 1000
+    BATCH_SIZE = 10
     SYMBOLS = []  # 将由market_analyzer更新
 
     def __init__(self):
