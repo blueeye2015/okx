@@ -47,7 +47,7 @@ class KlineDAO(BaseDAO):
     async def create_table(self):
         pass
     
-    @async_timer
+    #@async_timer
     async def insert(self, kline: Kline):
         """插入单条数据"""
         async with self.db_manager.get_session() as session:
@@ -83,7 +83,7 @@ class KlineDAO(BaseDAO):
             finally:
                 await session.close()
     
-    @async_timer
+    #@async_timer
     async def save_klines(self, kline_models: List[Kline]):
         if not kline_models:
             return
@@ -118,7 +118,7 @@ class KlineDAO(BaseDAO):
                 await session.rollback()
                 raise e
     
-    @async_timer
+    #@async_timer
     async def get_latest_kline(self, symbol: str) -> Optional[Kline]:
         """获取指定交易对的最新K线数据（同步方式）"""
         async with self.db_manager.get_session() as session:
@@ -148,7 +148,7 @@ class KlineDAO(BaseDAO):
                 logging.error(f"获取最新K线数据失败: {e}")
                 raise
            
-    @async_timer
+    #@async_timer
     async def query(self, symbol: str = None, 
               start_time: datetime = None, 
               end_time: datetime = None) -> List[Kline]:

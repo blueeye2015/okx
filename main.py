@@ -9,7 +9,7 @@ import asyncio
 
 
 async def main():
-    logging.basicConfig(
+    logging.basicConfig(filename='klines.log', 
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
@@ -27,7 +27,7 @@ async def main():
             await market_service.update_market_data()
             
             
-            await asyncio.sleep(60)
+            await asyncio.sleep(30)
             
         except KeyboardInterrupt:
             logging.info("程序正在退出...")

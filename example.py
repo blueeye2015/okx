@@ -77,7 +77,7 @@ if __name__ == '__main__':
     # result = fundingAPI.get_bills('USDT', '130')
 
     # market api
-    marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
+    #marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 获取所有产品行情信息  Get Tickers
     #result = marketAPI.get_tickers('SPOT')
     # 获取单个产品行情信息  Get Ticker
@@ -87,7 +87,7 @@ if __name__ == '__main__':
     # 获取产品深度  Get Order Book
     # result = marketAPI.get_orderbook('BTC-USDT-210402', '400')
     # 获取所有交易产品K线数据  Get Candlesticks
-    result = marketAPI.get_candlesticks('ACT-USDT', bar='1m')
+    #result = marketAPI.get_candlesticks('ACT-USDT', bar='1m')
     # 获取交易产品历史K线数据（仅主流币实盘数据）  Get Candlesticks History（top currencies in real-trading only）
     # result = marketAPI.get_history_candlesticks('BTC-USDT')
     # 获取指数K线数据  Get Index Candlesticks
@@ -99,9 +99,9 @@ if __name__ == '__main__':
     #result = marketAPI.history_trades('BTC-USDT',limit='10',type=1)
 
     # public api
-    #publicAPI = Public.PublicAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
+    publicAPI = Public.PublicAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 获取交易产品基础信息  Get instrument
-    # result = publicAPI.get_instruments('FUTURES', 'BTC-USDT')
+    result = publicAPI.get_instruments('SPOT')
     # 获取交割和行权记录  Get Delivery/Exercise History
     # result = publicAPI.get_deliver_history('FUTURES', 'BTC-USD')
     # 获取持仓总量  Get Open Interest

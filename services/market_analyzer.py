@@ -72,6 +72,27 @@ class MarketAnalyzer(ExchangeBase):
             return self.cache
             
         try:
+            # 1. 首先获取 OKX 的最小下单数量数据
+            okx_url = "https://www.okx.com/api/v5/public/instruments"
+            okx_params = {
+                'instType': 'SPOT'
+            }
+            
+            okx_response = requests.get(
+                okx_url,
+                proxies=self.proxies,
+                params=okx_params,
+                timeout=10
+            )
+            okx_response.raise_for_status()
+            okx_data = okx_response.json()
+            
+            # 创建最小下单量字典
+            min_size_dict = {
+                item['baseCcy']: float(item['minSz'])
+                for item in okx_data.get('data', [])
+                if item['quoteCcy'] == 'USDT'  # 只考虑 USDT 交易对
+            }
             url = "https://api.coingecko.com/api/v3/coins/markets"
             params = {
                 'vs_currency': 'usd',
@@ -90,14 +111,34 @@ class MarketAnalyzer(ExchangeBase):
             response.raise_for_status()  # 检查响应状态
             data = response.json()
             
-            # 处理数据并更新缓存
-            market_data = {
-                item['symbol'].upper(): {
+            # 3. 处理数据并更新缓存
+            market_data = {}
+            excluded_coins = []
+            
+            for item in data:
+                if item['market_cap'] is None:
+                    continue
+                    
+                symbol = item['symbol'].upper()
+                current_price = item.get('current_price', 0)
+                
+                # 计算最小购买金额
+                min_size = min_size_dict.get(symbol, 0)
+                min_purchase_amount = current_price * min_size if min_size > 0 else float('inf')
+                
+                # 如果最小购买金额大于3USDT，排除该币种
+                if min_purchase_amount > 3:
+                    excluded_coins.append(f"{symbol}(${min_purchase_amount:.2f})")
+                    continue
+                    
+                market_data[symbol] = {
                     'market_cap': item['market_cap'],
-                    'first_listed': item.get('genesis_date')  # 上市日期
+                    'first_listed': item.get('genesis_date')
                 }
-                for item in data if item['market_cap'] is not None
-            }
+            
+            # 记录被排除的币种
+            if excluded_coins:
+                logging.info(f"因最小购买金额超过3USDT被排除的币种: {', '.join(excluded_coins)}")
             
             self._update_cache(market_data)
             return market_data
@@ -110,7 +151,7 @@ class MarketAnalyzer(ExchangeBase):
                 return self.cache
             return {}
 
-    def get_valid_symbols(self, min_market_cap: float = 1000000000, min_age_months: int = 1) -> List[str]:
+    def get_valid_symbols(self, min_market_cap: float = 5000000, min_age_months: int = 1) -> List[str]:
         """
         获取符合条件的交易对
         
@@ -130,7 +171,7 @@ class MarketAnalyzer(ExchangeBase):
             
             # 当前时间
             current_time = datetime.now()
-            min_list_date = current_time - timedelta(days=30 * min_age_months)
+            min_list_date = current_time - timedelta(days=90 * min_age_months)
             
             valid_symbols = []
             
