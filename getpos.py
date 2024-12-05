@@ -85,7 +85,7 @@ if __name__ == '__main__':
                     else:
                         #保证金余额小于下单所需金额，把手上小单平了
                         raise SpecialJumpException("保证金过少")
-            elif pos['leverage']>10 and pos['margin']<50: #如果是高杠杆直接挂单
+            elif pos['leverage']>10 and pos['margin']<10: #如果是高杠杆直接挂单
                 #获取该合约未完成订单
                 result1 = tradeAPI.get_order_list(instType='SWAP',instId=pos['symbol'])
                 orderlist = parse_orderlist(json.dumps(result1))
@@ -93,7 +93,7 @@ if __name__ == '__main__':
                     #计算强平价格
                     price = float(pos['liquidation_price'])*(1-0.013) if pos['side'] == 'sell' else float(pos['liquidation_price'])*(1+0.013)
                     order_reslut = tradeAPI.place_order(instId=pos['symbol'], tdMode='isolated', side=pos['side'],
-                                    ordType='limit', sz=abs(pos['size']), px = price)
+                                    ordType='limit', sz=abs(pos['size'])*2, px = price)
             elif float(pos['uplRatio'])<-0.3 and pos['margin']>100:
                 #大于25的如果亏损超过30%就止损
                 order_reslut = tradeAPI.place_order(instId=pos['symbol'], side='sell' if pos['side'] == 'buy' else 'buy',
