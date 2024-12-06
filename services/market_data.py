@@ -139,22 +139,7 @@ class MarketDataService(ExchangeBase):
                 if isinstance(result, Exception):
                     logging.error(f"更新 {symbol} 失败: {str(result)}")    
             
-    def get_kline_data(self, symbol, minutes=120):
-        """获取最近n分钟的K线数据"""
-        query = text("""
-            SELECT timestamp, volume, close
-            FROM klines
-            WHERE symbol = :symbol
-            AND timestamp >= NOW() - INTERVAL :minutes MINUTE
-            ORDER BY timestamp DESC
-        """)
-        
-        df = pd.read_sql(
-            query,
-            self.engine,
-            params={'symbol': symbol, 'minutes': minutes}
-        )
-        return df
+
     
     
     def close(self) -> None:
