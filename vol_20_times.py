@@ -130,6 +130,7 @@ class MarketAnalyzer:
         # 计算移动平均线
         hour_data.loc[:, 'MA5'] = hour_data['close'].rolling(window=5).mean()
         hour_data.loc[:, 'MA20'] = hour_data['close'].rolling(window=20).mean()
+        hour_data.loc[:, 'MA60'] = hour_data['close'].rolling(window=60).mean()
         
         # 去除NaN
         hour_data = hour_data.dropna()
@@ -140,6 +141,7 @@ class MarketAnalyzer:
         # 计算趋势
         ma5_slope = (hour_data['MA5'].iloc[0] - hour_data['MA5'].iloc[-1]) / len(hour_data)
         ma20_slope = (hour_data['MA20'].iloc[0] - hour_data['MA20'].iloc[-1]) / len(hour_data)
+        ma60_slope = (hour_data['MA60'].iloc[0] - hour_data['MA60'].iloc[-1]) / len(hour_data)
         
         # 定义趋势判断标准
         threshold = 0.0001  # 可以根据实际情况调整
