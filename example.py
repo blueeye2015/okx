@@ -203,3 +203,6 @@ if __name__ == '__main__':
     print(json.dumps(result))
     #api= json.dumps(result)
     #api['data']
+    # 提取并打印所有 instId
+    for item in result['data']:
+        print(item['instId'])
