@@ -27,7 +27,7 @@ async def main():
             await market_service.update_market_data()
             
             
-            await asyncio.sleep(30)
+            await asyncio.sleep(100)
             
         except KeyboardInterrupt:
             logging.info("程序正在退出...")

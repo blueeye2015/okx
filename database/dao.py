@@ -102,7 +102,7 @@ class KlineDAO(BaseDAO):
                 
                 await session.execute(
                     text("""
-                    INSERT INTO klines (symbol, timestamp, open, high, low, close, volume)
+                    INSERT INTO klines_5m (symbol, timestamp, open, high, low, close, volume)
                     VALUES (:symbol, :timestamp, :open, :high, :low, :close, :volume)
                     ON CONFLICT (symbol, timestamp) DO UPDATE SET
                         open = EXCLUDED.open,

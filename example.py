@@ -99,9 +99,9 @@ if __name__ == '__main__':
     #result = marketAPI.history_trades('BTC-USDT',limit='10',type=1)
 
     # public api
-    publicAPI = Public.PublicAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
+    #publicAPI = Public.PublicAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 获取交易产品基础信息  Get instrument
-    result = publicAPI.get_instruments('SPOT')
+    #result = publicAPI.get_instruments('SPOT')
     # 获取交割和行权记录  Get Delivery/Exercise History
     # result = publicAPI.get_deliver_history('FUTURES', 'BTC-USD')
     # 获取持仓总量  Get Open Interest

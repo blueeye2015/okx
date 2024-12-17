@@ -182,7 +182,9 @@ class MarketAnalyzer:
         # # print(f"MA60 trend - Slope: {ma60_slope:.6f}, R²: {ma60_r2:.4f}")
         
         # # 趋势判断标准
-        slope_threshold = 0.0001  # 斜率阈值
+        slope_threshold_ma5 = 0.02    # 短期可以设置大一点
+        slope_threshold_ma20 = 0.015  # 中期适中
+        slope_threshold_ma60 = 0.01   # 长期可以设置小一点  # 斜率阈值
         r2_threshold = 0.6      # R²值阈值
         
         # # 判断趋势
@@ -200,15 +202,15 @@ class MarketAnalyzer:
         ma_alignment_down = (latest_prices['ma5'] < latest_prices['ma20'] < latest_prices['ma60'])
         
         # 确定最终趋势
-        if (ma5_slope > slope_threshold and 
-            ma20_slope > slope_threshold and 
-            ma60_slope > slope_threshold and 
+        if (ma5_slope > slope_threshold_ma5 and 
+            ma20_slope > slope_threshold_ma20 and 
+            ma60_slope > slope_threshold_ma60 and 
             significant_trends >= 2 and
             ma_alignment_up):
             trend = TrendType.UP
-        elif (ma5_slope < -slope_threshold and 
-            ma20_slope < -slope_threshold and 
-            ma60_slope < -slope_threshold and 
+        elif (ma5_slope < -slope_threshold_ma5 and 
+            ma20_slope < -slope_threshold_ma20 and 
+            ma60_slope < -slope_threshold_ma60 and 
             significant_trends >= 2 and
             ma_alignment_down):
             trend = TrendType.DOWN
