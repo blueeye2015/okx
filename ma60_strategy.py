@@ -52,7 +52,7 @@ class DeltaNeutralStrategy():
         self.max_value = 20 #最大持仓金额
         self.step_value = 2 #每次开仓金额       
         # 仓位记录
-        self.position_perc = 0.5 #总仓位占比
+        self.position_perc = 0.1 #总仓位占比
         self.engine = create_engine('postgresql://postgres:12@localhost:5432/market_data')
         Session = sessionmaker(bind=self.engine)
         self.session = Session()            

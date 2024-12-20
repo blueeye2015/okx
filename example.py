@@ -77,7 +77,7 @@ if __name__ == '__main__':
     # result = fundingAPI.get_bills('USDT', '130')
 
     # market api
-    #marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
+    marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 获取所有产品行情信息  Get Tickers
     #result = marketAPI.get_tickers('SPOT')
     # 获取单个产品行情信息  Get Ticker
@@ -95,8 +95,8 @@ if __name__ == '__main__':
     # 获取标记价格K线数据  Get Mark Price Candlesticks
     #result = marketAPI.get_markprice_candlesticks('NEIRO-USDT',limit=1000,bar='1m')
     # 获取交易产品公共成交数据  Get Trades
-    # result = marketAPI.get_trades('BTC-USDT', '400')
-    #result = marketAPI.history_trades('BTC-USDT',limit='10',type=1)
+    #result = marketAPI.get_trades('BTC-USDT', '400')
+    result = marketAPI.history_trades('BTC-USDT',limit='10',type=1,before=629871423)
 
     # public api
     #publicAPI = Public.PublicAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
@@ -205,4 +205,4 @@ if __name__ == '__main__':
     #api['data']
     # 提取并打印所有 instId
     for item in result['data']:
-        print(item['instId'])
+        print(item)
