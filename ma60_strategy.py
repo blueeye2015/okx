@@ -1,4 +1,5 @@
 import ccxt
+import okex.Account_api as Account
 import pandas as pd
 import time
 from datetime import datetime
@@ -10,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Enum, Boolean
 from sqlalchemy.orm import declarative_base  # 新的导入方式
 import requests
-
+import json
 
 class DeltaNeutralStrategy():
     def __init__(self):
@@ -19,11 +20,14 @@ class DeltaNeutralStrategy():
             'http': 'http://127.0.0.1:7890',  # 根据您的实际代理地址修改
             'https': 'http://127.0.0.1:7890'  # 根据您的实际代理地址修改
         }
+        self.api_key = "ba7f444f-e83e-4dd1-8507-bf8dd9033cbc"
+        self.secret_key = "D5474EF76B0A7397BFD26B9656006480"
+        self.passphrase = "TgTB+pJoM!d20F"
         # 初始化交易所API（这里以binance为例）
         self.exchange = ccxt.okx({
-            'apiKey': 'ba7f444f-e83e-4dd1-8507-bf8dd9033cbc',
-            'secret': 'D5474EF76B0A7397BFD26B9656006480',
-            'password': 'TgTB+pJoM!d20F',
+            'apiKey': self.api_key,
+            'secret': self.secret_key,
+            'password': self.passphrase,
             'enableRateLimit': True,
             'proxies': self.proxies,  # 添加代理设置
             'timeout': 30000,    # 设置超时时间为30秒
@@ -32,8 +36,6 @@ class DeltaNeutralStrategy():
                 'adjustForTimeDifference': True
             }
         })
-
-
 
         # 验证连接
         try:
@@ -463,6 +465,7 @@ class DeltaNeutralStrategy():
             amount: 交易数量
             type = market
             """
+            return True, random.randint(10000000, 99999999)
             try:
                 # if side == 'sell':
                 #     available_position = self.get_position(self.symbol)
@@ -560,27 +563,29 @@ class DeltaNeutralStrategy():
     def get_active_positions(self):
         """从数据库获取特定交易对的活跃仓位"""
         try:
-            
-            query = text("""
-                SELECT price, quantity, timestamp, symbol 
-                FROM trade_orders 
-                WHERE order_type = 'BUY' 
-                AND status = 'CLOSED'
-                AND id NOT IN (
-                    SELECT id 
-                    FROM trade_orders 
-                    WHERE order_type = 'SELL' 
-                    AND status = 'CLOSED'
-                )
-            """)
+            # 获取tradesymbol表的交易对
+            active_symbols = self.get_active_symbols()
+            # 提取币种并添加到 results
+            active_currencies = [symbol.split('-')[0] for symbol in active_symbols]
+            # flag是实盘与模拟盘的切换参数
+            # flag = '1'  # 模拟盘
+            flag = '0'  # 实盘
+            accountAPI = Account.AccountAPI(self.api_key, self.secret_key, self.passphrase, False, flag, self.proxies)
+            # 查看账户余额  Get Balance
+            result1 = accountAPI.get_account('')
+            data = json.loads(json.dumps(result1))
                 
-            
+            result = []
+            for item in data["data"][0]["details"]:
+                # 检查 eqUsd 是否大于 10
+                if float(item["eqUsd"]) > 10 and item['ccy'] in active_currencies:
+                    result.append(item)
             # 使用 pandas 读取查询结果
-            df = pd.read_sql(query, self.engine)
+            
             
             # 转换为字典列表
-            positions = df.to_dict('records')
-            return positions
+            
+            return result
         except Exception as e:
             logging.error(f"获取活跃仓位时出错: {str(e)}")
             return []   
@@ -695,7 +700,7 @@ class DeltaNeutralStrategy():
                         # max_attempts = 3
                         # attempt = 0
                         # while attempt < max_attempts:
-                        success, order_id = self.place_market_order(                                
+                        success, order_id= self.place_market_order(                                
                             side='buy',
                             amount=positions,
                             price=fresh_prices['mid_price']
@@ -726,35 +731,35 @@ class DeltaNeutralStrategy():
                         if not fresh_prices:
                             continue
 
-                        max_attempts = 3
-                        attempt = 0
-                        while attempt < max_attempts:
-                            success, order_id = self.place_market_order(
-                                side='sell',
-                                amount=pos['quantity'] ,
-                                price=fresh_prices['mid_price']
-                            )
+                        # max_attempts = 3
+                        # attempt = 0
+                        # while attempt < max_attempts:
+                        success, order_id = self.place_market_order(
+                            side='sell',
+                            amount=pos['quantity'] ,
+                            price=fresh_prices['mid_price']
+                        )
 
-                            if success:
-                                profit = (fresh_prices['mid_price'] - pos['price']) * pos['quantity']
-                                logging.info(f"{self.symbol} 平仓成功: 原因={reason}, 盈亏={profit}")
-                                self.record_trade_pair(order_id, profit, fresh_prices['mid_price'])
+                        if success:
+                            profit = (fresh_prices['mid_price'] - pos['price']) * pos['quantity']
+                            logging.info(f"{self.symbol} 平仓成功: 原因={reason}, 盈亏={profit}")
+                            self.record_trade_pair(order_id, profit, fresh_prices['mid_price'])
 
-                                # 停用该交易对
-                                self.deactivate_symbol(self.symbol)
-                                
-                                # 检查是否需要添加新的交易对
-                                active_symbols = self.get_active_symbols()
-                                if len(active_symbols) < 9:
-                                    new_symbols = self.generate_trade_signals()
-                                    if new_symbols:
-                                        logging.info(f"添加了新的交易对: {new_symbols}")
-                                break
+                            # 停用该交易对
+                            self.deactivate_symbol(self.symbol)
+                            
+                            # 检查是否需要添加新的交易对
+                            active_symbols = self.get_active_symbols()
+                            if len(active_symbols) < 9:
+                                new_symbols = self.generate_trade_signals()
+                                if new_symbols:
+                                    logging.info(f"添加了新的交易对: {new_symbols}")
+                            break
 
-                            attempt += 1
-                            if attempt < max_attempts:
-                                logging.info(f"{self.symbol} 重试卖出，第{attempt}次")
-                                time.sleep(0.5)
+                            # attempt += 1
+                            # if attempt < max_attempts:
+                            # logging.info(f"{self.symbol} 重试卖出，第{attempt}次")
+                            # time.sleep(0.5)
 
                 time.sleep(60)  # 整体循环间隔
 
