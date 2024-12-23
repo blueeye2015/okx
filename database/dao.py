@@ -2,8 +2,9 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.future import select
-from database.models import KlineModel
+from database.models import KlineModel,TradeModel
 from models.kline import Kline
+from models.trade import trade
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
@@ -177,4 +178,74 @@ class KlineDAO(BaseDAO):
                     volume=row.volume
                 ) for row in query.all()
             ]
-        
+
+class TradeDAO(BaseDAO):
+    async def create_table(self):
+        pass
+    
+    #@async_timer
+    async def insert(self, trade: trade):
+        """插入单条数据"""
+        async with self.db_manager.get_session() as session:
+            try:
+                trade_model = TradeModel(
+                    symbol=trade.symbol,
+                    timestamp=trade.timestamp,
+                    tradeId=trade.tradeId,
+                    px=trade.px,
+                    sz=trade.sz,
+                    side=trade.side
+                )
+                
+                stmt = insert(TradeModel).values(
+                    vars(trade_model)
+                ).on_conflict_do_update(
+                    index_elements=['symbol', 'timestamp'],
+                    set_={
+                        'tradeId': trade_model.tradeId,
+                        'px': trade_model.px,
+                        'sz': trade_model.sz,
+                        'side': trade_model.side
+                    }
+                )
+                
+                await session.execute(stmt)
+                await session.commit()
+            except Exception as e:
+                await session.rollback()
+                raise e
+            finally:
+                await session.close()        
+
+    #@async_timer
+    async def save_klines(self, trade_models: List[trade]):
+        if not trade_models:
+            return
+        async with self.db_manager.get_session() as session:
+            try:
+                # 使用批量插入
+                values = [{
+                    'symbol': model.symbol,
+                    'timestamp': model.timestamp,
+                    'tradeId': model.tradeId,
+                    'px': model.px,
+                    'sz': model.sz,
+                    'side': model.side
+                } for model in trade_models]
+                
+                await session.execute(
+                    text("""
+                    INSERT INTO trade_data (symbol, timestamp, tradeId, px, sz, side)
+                    VALUES (:symbol, :timestamp, :tradeId, :px, :sz, :side)
+                    ON CONFLICT (symbol, timestamp) DO UPDATE SET
+                        tradeId = EXCLUDED.tradeId,
+                        px = EXCLUDED.px,
+                        sz = EXCLUDED.sz,
+                        side = EXCLUDED.side
+                    """),
+                    values
+                )
+                await session.commit()
+            except Exception as e:
+                await session.rollback()
+                raise e

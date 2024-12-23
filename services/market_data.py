@@ -6,9 +6,10 @@ import asyncio
 
 from exchange.base import ExchangeBase
 from config.settings import Config
-from database.dao  import KlineDAO
+from database.dao  import KlineDAO,TradeDAO
 from database.manager import DatabaseManager
 from models.kline import Kline
+from models.trade import trade
 
 class MarketDataService(ExchangeBase):
     """
@@ -27,6 +28,7 @@ class MarketDataService(ExchangeBase):
         self.config = config
         self.db_manager = DatabaseManager(config.DB_CONFIG)
         self.kline_dao = KlineDAO(self.db_manager)
+        self.trade_dao = TradeDAO(self.db_manager)
         self._init_database()
         self.semaphore = asyncio.Semaphore(20)  # 限制并发请求数
         self._initialized_symbols = set()  # 只需要记录是否是首次执行
@@ -35,6 +37,7 @@ class MarketDataService(ExchangeBase):
         """初始化数据库表"""
         try:
             self.kline_dao.create_table()
+            self.trade_dao.create_table()
             logging.info("数据库表初始化成功")
         except Exception as e:
             logging.error(f"数据库表初始化失败: {e}")
