@@ -321,7 +321,7 @@ class DeltaNeutralStrategy():
             total = float(balance['USDT']['total'])
             
             # 计算当前持仓占总资产的比例
-            position_ratio = ((total-total_free) / total * 100) 
+            position_ratio = (total-total_free) / total 
             
             # 获取最新订单簿价格
             orderbook_prices = self.get_orderbook_mid_price()
