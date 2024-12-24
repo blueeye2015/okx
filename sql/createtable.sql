@@ -20,12 +20,22 @@ CREATE TABLE IF NOT EXISTS public.trade_pairs (
 
 CREATE TABLE IF NOT EXISTS public.trade_data
 (
-    id SERIAL ,  -- 自增主键
+    id SERIAL PRIMARY KEY,  -- 自增主键
     symbol VARCHAR(255) NOT NULL,  -- 产品ID
     tradeId VARCHAR(255) NOT NULL,  -- 成交ID
     px NUMERIC(20, 8) NOT NULL,  -- 成交价格
     sz NUMERIC(20, 8) NOT NULL,  -- 成交数量
     side VARCHAR(4) NOT NULL CHECK (side IN ('buy', 'sell')),  -- 成交方向
-    timestamp BIGINT NOT NULL,  -- 成交时间，Unix时间戳的毫秒数
-	CONSTRAINT trade_data_pkey PRIMARY KEY (symbol, timestamp)
+    timestamp timestamp with time zone NOT NULL -- 成交时间
+	
 );
+CREATE TABLE IF NOT EXISTS public.trading_symbols
+(
+    symbol character varying(20) COLLATE pg_catalog."default" NOT NULL,
+    market_value numeric(20,8),
+    status character varying(10) COLLATE pg_catalog."default",
+    group_type character varying(10) COLLATE pg_catalog."default",
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT trading_symbols_pkey PRIMARY KEY (symbol)
+)

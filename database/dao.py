@@ -218,7 +218,7 @@ class TradeDAO(BaseDAO):
                 await session.close()        
 
     #@async_timer
-    async def save_klines(self, trade_models: List[trade]):
+    async def save_trade(self, trade_models: List[trade]):
         if not trade_models:
             return
         async with self.db_manager.get_session() as session:
@@ -236,12 +236,7 @@ class TradeDAO(BaseDAO):
                 await session.execute(
                     text("""
                     INSERT INTO trade_data (symbol, timestamp, tradeId, px, sz, side)
-                    VALUES (:symbol, :timestamp, :tradeId, :px, :sz, :side)
-                    ON CONFLICT (symbol, timestamp) DO UPDATE SET
-                        tradeId = EXCLUDED.tradeId,
-                        px = EXCLUDED.px,
-                        sz = EXCLUDED.sz,
-                        side = EXCLUDED.side
+                    VALUES (:symbol, :timestamp, :tradeId, :px, :sz, :side)                  
                     """),
                     values
                 )
@@ -249,3 +244,32 @@ class TradeDAO(BaseDAO):
             except Exception as e:
                 await session.rollback()
                 raise e
+            
+    #@async_timer
+    async def query(self, symbol: str = None, 
+              start_time: datetime = None, 
+              end_time: datetime = None) -> List[trade]:
+        """查询数据"""
+        async with self.db_manager.get_session() as session:
+            query = select(TradeModel)
+            
+            
+            if symbol:
+                query = query.filter(TradeModel.symbol == symbol)
+            if start_time:
+                query = query.filter(TradeModel.timestamp >= start_time)
+            if end_time:
+                query = query.filter(TradeModel.timestamp <= end_time)
+                
+            query = query.order_by(TradeModel.timestamp)
+            
+            return [
+                trade(
+                    symbol=row.symbol,
+                    timestamp=row.timestamp,
+                    side=row.side,
+                    px=row.px,
+                    sz=row.sz,
+                    tradeId=row.tradeId
+                ) for row in query.all()
+            ]
