@@ -21,9 +21,9 @@ if __name__ == '__main__':
     flag = '0'  # 实盘
 
     # account api
-    #accountAPI = Account.AccountAPI(api_key, secret_key, passphrase, False, flag, proxies)
+    accountAPI = Account.AccountAPI(api_key, secret_key, passphrase, False, flag, proxies)
     # 查看账户余额  Get Balance
-    #result = accountAPI.get_account('USDT')
+    result = accountAPI.get_account('')
     # 查看持仓信息  Get Positions
     #result = accountAPI.get_positions('MARGIN', '')
     # 账单流水查询（近七天） Get Bills Details (recent 7 days)
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     # result = fundingAPI.get_bills('USDT', '130')
 
     # market api
-    marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
+    #marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 获取所有产品行情信息  Get Tickers
     #result = marketAPI.get_tickers('SPOT')
     # 获取单个产品行情信息  Get Ticker
@@ -96,7 +96,7 @@ if __name__ == '__main__':
     #result = marketAPI.get_markprice_candlesticks('NEIRO-USDT',limit=1000,bar='1m')
     # 获取交易产品公共成交数据  Get Trades
     #result = marketAPI.get_trades('BTC-USDT', '400')
-    result = marketAPI.history_trades('BTC-USDT',limit='10',type=1,before=629871423)
+    #result = marketAPI.history_trades('BTC-USDT',limit='10',type=1,before=629871423)
 
     # public api
     #publicAPI = Public.PublicAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)

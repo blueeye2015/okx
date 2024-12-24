@@ -196,7 +196,7 @@ class DeltaNeutralStrategy():
         """获取交易对"""
         try:         
             query = text("""
-                SELECT distinct symbol FROM trend_records_5m WHERE consecutive_count>50 AND timestamp >= NOW() - INTERVAL '120 minutes' 
+                SELECT distinct symbol FROM trend_records_5m WHERE consecutive_count>50 AND timestamp >= NOW() - INTERVAL '60 minutes' 
                 and symbol not in ('CITY-USDT','SWEAT-USDT','CHZ-USDT','GALFT-USDT','TRA-USDT','ARG-USDT','POR-USDT','MENGO-USDT','SPURS-USDT')
                 and ma60_r2>0.6 and ma60_slope>0.01;
             """)
@@ -234,17 +234,20 @@ class DeltaNeutralStrategy():
             logging.info(f"生成交易信号时出错: {str(e)}")
             return None
        
-    def check_exit_conditions(self, current_price ,entry_price):
-        """检查出场条件"""
-        #current_price = indicators['current_price']
-        profit_pct = (current_price - entry_price) / entry_price
-        
+    def check_exit_conditions(self, profit,timestamp):
+        """检查出场条件"""   
+        #当前时间
+        current_time = datetime.now()
+        # 持仓时间
+        if current_time - timestamp > self.retention:
+            return True, "TIME_LIMIT"
+
         # 止盈条件
-        if profit_pct >= self.profit_target:
+        if float(profit) >= self.profit_target:
             return True, "TAKE_PROFIT"
         
         # 止损条件
-        if profit_pct <= -self.stop_loss:
+        if float(profit)  <= -self.stop_loss:
             return True, "STOP_LOSS"    
             
         return False, None
@@ -580,17 +583,32 @@ class DeltaNeutralStrategy():
                 # 检查 eqUsd 是否大于 10
                 if float(item["eqUsd"]) > 10 and item['ccy'] in active_currencies:
                     result.append(item)
-            # 使用 pandas 读取查询结果
-            
-            
-            # 转换为字典列表
             
             return result
         except Exception as e:
             logging.error(f"获取活跃仓位时出错: {str(e)}")
             return []   
 
-    def record_trade_pair(self, order_id, profit, sell_price):
+    def get_order(self):
+        """
+        获取交易信息
+        symbol : 交易对
+        """
+        query = text("""
+                SELECT price, quantity, timestamp
+                FROM trade_orders
+                WHERE symbol = :symbol
+            """)
+        
+        df = pd.read_sql(query, self.engine, params={'symbol': self.symbol})
+
+        if not df.empty:
+                logging.error(f"未找到订单信息:  symbol={self.symbol}")
+                return False
+        return df
+
+
+    def record_trade_pair(self,  profit, timestamp):
         """
         记录交易对的盈亏情况
         
@@ -599,27 +617,9 @@ class DeltaNeutralStrategy():
         sell_order_id: 卖出订单ID
         symbol: 交易对符号
         """
-        try:     
-            query = text("""
-                SELECT price, quantity, timestamp
-                FROM trade_orders
-                WHERE id = :order_id
-            """)
-            
-            # 执行查询        
-            df = pd.read_sql(query, self.engine, params={'order_id': order_id})
-            
-            if not df.empty:
-                logging.error(f"未找到订单信息:  sell_order_id={order_id}")
-                return False
-            
-
-            buy_total = sell_price * df['price']
-            # 计算盈利百分比
-            profit_percentage = (profit / buy_total) * 100
-            
+        try:                                   
             # 计算持仓时长
-            hold_duration = datetime.now() - df['timestamp']
+            hold_duration = datetime.now() - timestamp
             
             # 插入交易对记录
             insert_query = text("""
@@ -722,28 +722,30 @@ class DeltaNeutralStrategy():
                 
                 # 检查现有仓位是否需要平仓
                 for pos in active_positions:
-                    self.symbol = pos['symbol']
+                    self.symbol = pos['ccy']+""+'-USDT'
                     current_price = self.exchange.fetch_ticker(self.symbol)['last'] #获取最新价格
-                    should_exit, reason = self.check_exit_conditions(current_price, pos['price'])
+                    profit=float(pos['totalPnlRatio'])
+                    df = self.get_order()
+                    should_exit, reason = self.check_exit_conditions(profit,df['timestamp'])
                     
                     if should_exit:
-                        fresh_prices = self.get_orderbook_mid_price()
-                        if not fresh_prices:
-                            continue
+                        # fresh_prices = self.get_orderbook_mid_price()
+                        # if not fresh_prices:
+                        #     continue
 
                         # max_attempts = 3
                         # attempt = 0
-                        # while attempt < max_attempts:
+                        # while attempt < max_attempts: 
                         success, order_id = self.place_market_order(
                             side='sell',
                             amount=pos['quantity'] ,
-                            price=fresh_prices['mid_price']
+                            price=current_price
                         )
 
                         if success:
-                            profit = (fresh_prices['mid_price'] - pos['price']) * pos['quantity']
+                            # profit = (fresh_prices['mid_price'] - pos['price']) * pos['quantity']
                             logging.info(f"{self.symbol} 平仓成功: 原因={reason}, 盈亏={profit}")
-                            self.record_trade_pair(order_id, profit, fresh_prices['mid_price'])
+                            self.record_trade_pair(order_id, profit, df['timestamp'])
 
                             # 停用该交易对
                             self.deactivate_symbol(self.symbol)
