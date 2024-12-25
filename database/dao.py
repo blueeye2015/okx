@@ -236,7 +236,10 @@ class TradeDAO(BaseDAO):
                 await session.execute(
                     text("""
                     INSERT INTO trade_data (symbol, timestamp, tradeId, px, sz, side)
-                    VALUES (:symbol, :timestamp, :tradeId, :px, :sz, :side)                  
+                    VALUES (:symbol, :timestamp, :tradeId, :px, :sz, :side) 
+                    ON CONFLICT (symbol, tradeId, timestamp) DO UPDATE SET
+                        px = EXCLUDED.px,
+                        sz = EXCLUDED.sz                                     
                     """),
                     values
                 )

@@ -11,6 +11,8 @@ from database.dao  import KlineDAO,TradeDAO
 from database.manager import DatabaseManager
 from models.kline import Kline
 from models.trade import trade
+from dotenv import load_dotenv
+import os
 
 class MarketDataService(ExchangeBase):
     """
@@ -26,6 +28,9 @@ class MarketDataService(ExchangeBase):
             config (Config): 配置对象，包含数据库配置和其他设置
         """
         super().__init__() 
+        # 加载环境变量
+        load_dotenv()
+
         self.config = config
         self.db_manager = DatabaseManager(config.DB_CONFIG)
         self.kline_dao = KlineDAO(self.db_manager)
@@ -37,9 +42,9 @@ class MarketDataService(ExchangeBase):
         'http': 'http://127.0.0.1:7890',
         'https': 'http://127.0.0.1:7890'
         } #
-        self.api_key = "ba7f444f-e83e-4dd1-8507-bf8dd9033cbc"
-        self.secret_key = "D5474EF76B0A7397BFD26B9656006480"
-        self.passphrase = "TgTB+pJoM!d20F"
+        self.api_key = os.getenv('API_KEY')
+        self.secret_key = os.getenv('SECRET_KEY')
+        self.passphrase = os.getenv('PASSPHRASE')
         
     def _init_database(self) -> None:
         """初始化数据库表"""
