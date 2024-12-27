@@ -24,9 +24,12 @@ async def main():
                 config.update_symbols()
             
             #market_service.update_market_data()
-            await market_service.update_market_data()
+            #await market_service.update_market_data()
             ##await market_service.update_trade_data()
-            
+            await asyncio.gather(
+                market_service.update_market_data(),
+                market_service.update_trade_data()
+            )
             await asyncio.sleep(100)
             
         except KeyboardInterrupt:

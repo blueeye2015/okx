@@ -36,7 +36,8 @@ class MarketDataService(ExchangeBase):
         self.kline_dao = KlineDAO(self.db_manager)
         self.trade_dao = TradeDAO(self.db_manager)
         self._init_database()
-        self.semaphore = asyncio.Semaphore(20)  # 限制并发请求数
+        self.kline_semaphore = asyncio.Semaphore(20)  # 限制并发请求数
+        self.trade_semaphore = asyncio.Semaphore(20) 
         self._initialized_symbols = set()  # 只需要记录是否是首次执行
         self.proxies = {
         'http': 'http://127.0.0.1:7890',
@@ -70,7 +71,7 @@ class MarketDataService(ExchangeBase):
         Raises:
             Exception: 当获取数据失败时抛出异常
         """
-        async with self.semaphore:  # 使用信号量控制并发
+        async with self.kline_semaphore:  # 使用信号量控制并发
             try:
                 # 将时间转换为毫秒时间戳
                 # since = int(start_time.timestamp() * 1000)
@@ -168,7 +169,7 @@ class MarketDataService(ExchangeBase):
         Raises:
             Exception: 当获取数据失败时抛出异常
         """
-        async with self.semaphore:  # 使用信号量控制并发
+        async with self.trade_semaphore:  # 使用信号量控制并发
             try:
                 # 将时间转换为毫秒时间戳
                 # since = int(start_time.timestamp() * 1000)
@@ -230,13 +231,13 @@ class MarketDataService(ExchangeBase):
             # 批量保存
             if new_trade:
                 await self.trade_dao.save_trade(new_trade)
-                logging.info(f"更新了 {symbol} 的 {len(new_trade)} 条K线数据")
+                logging.info(f"更新了 {symbol} 的 {len(new_trade)} 条TRADE数据")
             
             # 标记该交易对已初始化
             self._initialized_symbols.add(symbol)
                 
         except Exception as e:
-            logging.error(f"更新 {symbol} 时出错: {str(e)}")
+            logging.error(f"更新TRADE {symbol} 时出错: {str(e)}")
             raise    
                     
     async def update_trade_data(self) -> None:
@@ -244,7 +245,8 @@ class MarketDataService(ExchangeBase):
         更新所有交易对的市场数据
         """
         tasks = []
-        for symbol in self.config.SYMBOLS:            
+        list =['BTC-USDT','ETH-USDT','XRP-USDT','DOGE-USDT','CORE-USDT','ONDO-USDT','JUP-USDT','IMX-USDT','STRK-USDT','OM-USDT','APT-USDT','ATOM-USDT','TRX-USDT','PYTH-USDT','TIA-USDT','POL-USDT','PENDLE-USDT']
+        for symbol in list:            
             task = asyncio.create_task(self.update_single_tradedata(symbol))
             tasks.append(task)               
             # 添加适当的延迟以遵守API限制
@@ -254,8 +256,9 @@ class MarketDataService(ExchangeBase):
             # 处理结果和异常
             for symbol, result in zip(self.config.SYMBOLS, results):
                 if isinstance(result, Exception):
-                    logging.error(f"更新 {symbol} 失败: {str(result)}")    
+                    logging.error(f"更新TRADE数据 {symbol} 失败: {str(result)}")    
             
+            await asyncio.sleep(1) 
 
     
     
