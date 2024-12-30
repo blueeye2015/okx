@@ -4,7 +4,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.future import select
 from database.models import KlineModel,TradeModel
 from models.kline import Kline
-from models.trade import trade
+from models.trade import Trade
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
@@ -34,10 +34,7 @@ def async_timer(func):
 class BaseDAO(ABC):
     def __init__(self, db_manager):
         self.db_manager = db_manager
-    
-    @abstractmethod
-    async def create_table(self): pass
-    
+        
     @abstractmethod
     async def insert(self, data): pass
     
@@ -45,9 +42,7 @@ class BaseDAO(ABC):
     async def query(self, **kwargs): pass
 
 class KlineDAO(BaseDAO):
-    async def create_table(self):
-        pass
-    
+        
     #@async_timer
     async def insert(self, kline: Kline):
         """插入单条数据"""
@@ -180,99 +175,159 @@ class KlineDAO(BaseDAO):
             ]
 
 class TradeDAO(BaseDAO):
-    async def create_table(self):
-        pass
-    
-    #@async_timer
-    async def insert(self, trade: trade):
-        """插入单条数据"""
+        
+    async def insert(self, trade: Trade):
+        """插入单条交易数据"""
+        if not isinstance(trade, Trade):
+            raise ValueError(f"Expected Trade object, got {type(trade)}")
+            
         async with self.db_manager.get_session() as session:
             try:
-                trade_model = TradeModel(
-                    symbol=trade.symbol,
-                    timestamp=trade.timestamp,
-                    tradeId=trade.tradeId,
-                    px=trade.px,
-                    sz=trade.sz,
-                    side=trade.side
-                )
+                # 直接创建字典
+                trade_data = {
+                    'trade_id': int(trade.trade_id),  # 确保是字符串
+                    'symbol': str(trade.symbol),
+                    'event_type': str(trade.event_type),
+                    'event_time': trade.event_time,
+                    'price': float(trade.price),
+                    'quantity': float(trade.quantity),
+                    'buyer_order_maker': bool(trade.buyer_order_maker),
+                    'trade_time': trade.trade_time
+                }
                 
-                stmt = insert(TradeModel).values(
-                    vars(trade_model)
-                ).on_conflict_do_update(
-                    index_elements=['symbol', 'timestamp'],
-                    set_={
-                        'tradeId': trade_model.tradeId,
-                        'px': trade_model.px,
-                        'sz': trade_model.sz,
-                        'side': trade_model.side
-                    }
+                stmt = insert(TradeModel).values(trade_data)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=['symbol','trade_id'],
+                    set_=trade_data
                 )
                 
                 await session.execute(stmt)
                 await session.commit()
             except Exception as e:
                 await session.rollback()
+                logging.error(f"Insert trade error: {str(e)}, trade data: {trade_data}")
                 raise e
             finally:
-                await session.close()        
+                await session.close()       
 
-    #@async_timer
-    async def save_trade(self, trade_models: List[trade]):
-        if not trade_models:
+    async def save_trades(self, trades: List[Trade]):
+        """批量保存交易数据"""
+        if not trades:
             return
+            
+        if not isinstance(trades, (list, tuple)):
+            raise ValueError(f"Expected list of Trade objects, got {type(trades)}")
+            
         async with self.db_manager.get_session() as session:
             try:
-                # 使用批量插入
-                values = [{
-                    'symbol': model.symbol,
-                    'timestamp': model.timestamp,
-                    'tradeId': model.tradeId,
-                    'px': model.px,
-                    'sz': model.sz,
-                    'side': model.side
-                } for model in trade_models]
+                # 添加类型检查和数据转换
+                values = []
+                for trade in trades:
+                    if not isinstance(trade, Trade):
+                        raise ValueError(f"Expected Trade object, got {type(trade)}")
+                        
+                    values.append({
+                        'trade_id': int(trade.trade_id),
+                        'symbol': str(trade.symbol),
+                        'event_type': str(trade.event_type),
+                        'event_time': trade.event_time,
+                        'price': float(trade.price),
+                        'quantity': float(trade.quantity),
+                        'buyer_order_maker': bool(trade.buyer_order_maker),
+                        'trade_time': trade.trade_time
+                    })
                 
-                await session.execute(
-                    text("""
-                    INSERT INTO trade_data (symbol, timestamp, tradeId, px, sz, side)
-                    VALUES (:symbol, :timestamp, :tradeId, :px, :sz, :side) 
-                    ON CONFLICT (symbol, tradeId, timestamp) DO UPDATE SET
-                        px = EXCLUDED.px,
-                        sz = EXCLUDED.sz                                     
-                    """),
-                    values
-                )
+                # 使用参数绑定的方式执行SQL
+                stmt = text("""
+                    INSERT INTO trades (
+                        trade_id, symbol, event_type, event_time, price,
+                        quantity, buyer_order_maker, trade_time
+                    )
+                    VALUES (
+                        :trade_id, :symbol, :event_type, :event_time, :price,
+                        :quantity, :buyer_order_maker, :trade_time
+                    )
+                    ON CONFLICT (symbol, trade_id) DO UPDATE SET                        
+                        event_type = EXCLUDED.event_type,
+                        event_time = EXCLUDED.event_time,
+                        price = EXCLUDED.price,
+                        quantity = EXCLUDED.quantity,
+                        buyer_order_maker = EXCLUDED.buyer_order_maker,
+                        trade_time = EXCLUDED.trade_time
+                """)
+                
+                # 打印调试信息
+                logging.debug(f"Executing batch insert with {len(values)} trades")
+                
+                await session.execute(stmt, values)
                 await session.commit()
+                
             except Exception as e:
                 await session.rollback()
+                logging.error(f"Save trades error: {str(e)}")
+                # 打印更详细的错误信息
+                if values:
+                    logging.error(f"First trade in batch: {values[0]}")
                 raise e
             
-    #@async_timer
-    async def query(self, symbol: str = None, 
-              start_time: datetime = None, 
-              end_time: datetime = None) -> List[trade]:
-        """查询数据"""
+    async def get_latest_trade(self, symbol: str) -> Optional[Trade]:
+        """获取指定交易对的最新交易数据"""
+        async with self.db_manager.get_session() as session:
+            try:
+                stmt = select(TradeModel).filter(
+                    TradeModel.symbol == symbol
+                ).order_by(
+                    TradeModel.trade_time.desc()  # 使用trade_time替代timestamp
+                ).limit(1)
+                
+                result = await session.execute(stmt)
+                row = result.scalar_one_or_none()
+                
+                if row:
+                    return Trade(
+                        trade_id=row.trade_id,
+                        symbol=row.symbol,
+                        event_type=row.event_type,
+                        event_time=row.event_time,
+                        price=row.price,
+                        quantity=row.quantity,
+                        buyer_order_maker=row.buyer_order_maker,
+                        trade_time=row.trade_time
+                    )
+                return None
+                
+            except Exception as e:
+                logging.error(f"获取最新交易数据失败: {e}")
+                raise
+
+    async def query(self, symbol: str = None,
+              start_time: datetime = None,
+              end_time: datetime = None) -> List[Trade]:
+        """查询交易数据"""
         async with self.db_manager.get_session() as session:
             query = select(TradeModel)
-            
             
             if symbol:
                 query = query.filter(TradeModel.symbol == symbol)
             if start_time:
-                query = query.filter(TradeModel.timestamp >= start_time)
+                query = query.filter(TradeModel.trade_time >= start_time)
             if end_time:
-                query = query.filter(TradeModel.timestamp <= end_time)
+                query = query.filter(TradeModel.trade_time <= end_time)
                 
-            query = query.order_by(TradeModel.timestamp)
+            query = query.order_by(TradeModel.trade_time)
+            
+            result = await session.execute(query)
+            rows = result.scalars().all()
             
             return [
-                trade(
+                Trade(
+                    trade_id=row.trade_id,
                     symbol=row.symbol,
-                    timestamp=row.timestamp,
-                    side=row.side,
-                    px=row.px,
-                    sz=row.sz,
-                    tradeId=row.tradeId
-                ) for row in query.all()
+                    event_type=row.event_type,
+                    event_time=row.event_time,
+                    price=row.price,
+                    quantity=row.quantity,
+                    buyer_order_maker=row.buyer_order_maker,
+                    trade_time=row.trade_time
+                ) for row in rows
             ]

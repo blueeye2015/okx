@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from config.settings import DBConfig
 from database.models import Base
+import logging
 
 class DatabaseManager:
     _instance = None
@@ -35,5 +36,9 @@ class DatabaseManager:
     
     async def close(self):
         if self._engine:
-            self._engine.dispose()
-            self._engine = None
+            try:
+                await self._engine.dispose()
+            except Exception as e:
+                logging.error(f"Error closing database connection: {e}")
+            finally:
+                self._engine = None

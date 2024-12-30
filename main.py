@@ -18,27 +18,23 @@ async def main():
     db_manager = DatabaseManager(config.DB_CONFIG)
     market_service = MarketDataService(config)
   
-    while True:
-        try:
-            if datetime.now().hour == 0 and datetime.now().minute == 0:
-                config.update_symbols()
+    
+    try:
+        if datetime.now().hour == 0 and datetime.now().minute == 0:
+            config.update_symbols()
+        
+        #market_service.update_market_data()
+        await market_service.run()
+        ##await market_service.update_trade_data()          
+        
+    except KeyboardInterrupt:
+        logging.info("程序正在退出...")
+        
+    except Exception as e:
+        logging.error(f"发生错误: {str(e)}")
+    finally:
+        await db_manager.close()
             
-            #market_service.update_market_data()
-            #await market_service.update_market_data()
-            ##await market_service.update_trade_data()
-            await asyncio.gather(
-                market_service.update_market_data(),
-                market_service.update_trade_data()
-            )
-            await asyncio.sleep(100)
-            
-        except KeyboardInterrupt:
-            logging.info("程序正在退出...")
-            await db_manager.close()
-            break
-        except Exception as e:
-            logging.error(f"发生错误: {str(e)}")
-            await asyncio.sleep(60)
 
 if __name__ == "__main__":
     asyncio.run(main())
