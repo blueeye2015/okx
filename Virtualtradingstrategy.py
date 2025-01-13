@@ -29,68 +29,49 @@ class VirtualTradingStrategy:
         self.engine = create_engine('postgresql://postgres:12@localhost:5432/market_data')
         Session = sessionmaker(bind=self.engine)
         self.session = Session()     
-              
-    def _init_database(self):
-        """初始化数据库表结构"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        
-        
-        
-        
-        # 策略性能记录表
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS strategy_performance (
-            date DATE PRIMARY KEY,
-            balance REAL,
-            daily_pnl REAL,
-            total_positions INTEGER,
-            winning_positions INTEGER,
-            win_rate REAL
-        )
-        ''')
-        
-        conn.commit()
-        conn.close()
+                          
 
     def get_eligible_symbols(self) -> List[str]:
         """获取符合条件的交易对"""
-        conn = sqlite3.connect(self.db_path)
-        
+                
         # 1. 获取正资金费率的币种
         funding_query = """
-        SELECT symbol, funding_rate 
+        SELECT symbol, fundingrate 
         FROM fundingrate 
-        WHERE funding_rate > 0
+        WHERE fundingtime = (select max(fundingtime) from fundingrate)
+        and fundingrate >0
         """
-        funding_df = pd.read_sql(funding_query, conn)
+        funding_df = pd.read_sql(funding_query, self.engine)
         
         # 2. 获取trend_records中连续20天为0的币种
         trend_query = """
-        SELECT symbol 
+        SELECT symbol
         FROM trend_records 
-        WHERE consecutive_count = 0 
-        AND date >= date('now', '-20 days')
+        WHERE timestamp >=NOW()-INTERVAL '21 days'
+		AND consecutive_count=0
         GROUP BY symbol 
         HAVING COUNT(*) >= 20
         """
-        trend_df = pd.read_sql(trend_query, conn)
+        trend_df = pd.read_sql(trend_query, self.engine)
         
         # 3. 从klines获取价格回落超过50%的币种
         klines_query = """
-        SELECT symbol,
-               close,
-               MAX(high) OVER (PARTITION BY symbol) as highest_price
-        FROM klines
-        WHERE date >= date('now', '-365 days')
+        SELECT symbol,highest_price,close,highest_price*1.0/close -1 as drop_ratio 
+        FROM (
+            SELECT symbol,close,timestamp,
+                MAX(high) OVER (PARTITION BY symbol) as highest_price,
+                FIRST_VALUE(timestamp) 
+                OVER (PARTITION BY symbol ORDER BY high DESC) as highest_price_timestamp,
+                ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp desc) cnt
+            FROM klines
+            WHERE TIMESTAMP >= NOW()-INTERVAL '365 days'
+            ) a
+        WHERE cnt = 1
         """
-        klines_df = pd.read_sql(klines_query, conn)
+        klines_df = pd.read_sql(klines_query, self.engine)
         price_drop_symbols = klines_df[
-            (klines_df['close'] / klines_df['highest_price']) < 0.5
+            (klines_df['drop_ratio'] ) > 0.5
         ]['symbol'].unique()
-        
-        conn.close()
         
         # 找出满足所有条件的币种
         eligible_symbols = set(funding_df['symbol']) & set(trend_df['symbol']) & set(price_drop_symbols)
