@@ -32,7 +32,7 @@ class DeltaNeutralStrategy():
 
 if __name__ == "__main__":
     strategy = DeltaNeutralStrategy()
-    balance = strategy.exchange.fetch_balance()
+    balance = strategy.exchange.fetchFundingRateHistory (symbol='BTC/USDT:USDT',limit = 100)
     
     #postition = strategy.exchange.fetch_position('')
     print(balance)
