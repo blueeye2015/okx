@@ -5,18 +5,21 @@ import time
 from typing import List, Dict
 import ccxt
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
+from dotenv import load_dotenv
+import os
+import logging
 
 class VirtualTradingStrategy:
     def __init__(self, 
                  db_path: str,
-                 initial_balance: float = 100000,  # 虚拟账户初始资金
+                 initial_balance: float = 10000,  # 虚拟账户初始资金
                  stop_loss_threshold: float = 0.4,
-                 take_profit_threshold: float = 0.3,  # 添加止盈阈值
+                 take_profit_threshold: float = 1,  # 添加止盈阈值
                  max_holding_days: int = 30,
                  leverage: int = 3,
-                 top_n: int = 10,
-                 position_size_per_trade: float = 0.1):  # 每笔交易占总资金的比例
+                 top_n: int = 20,
+                 position_size_per_trade: float = 0.05):  # 每笔交易占总资金的比例
         
         self.db_path = db_path
         self.initial_balance = initial_balance
@@ -28,7 +31,26 @@ class VirtualTradingStrategy:
         self.position_size_per_trade = position_size_per_trade
         self.engine = create_engine('postgresql://postgres:12@localhost:5432/market_data')
         Session = sessionmaker(bind=self.engine)
-        self.session = Session()     
+        self.session = Session()
+        load_dotenv('D:\OKex-API\.env')
+        
+        proxies = {
+            'http': 'http://127.0.0.1:7890',  # 根据您的实际代理地址修改
+            'https': 'http://127.0.0.1:7890'  # 根据您的实际代理地址修改
+        }
+        # 初始化交易所API（这里以binance为例）
+        self.exchange = ccxt.okx({
+            'apiKey': os.getenv('API_KEY'),
+            'secret': os.getenv('SECRET_KEY'),
+            'password': os.getenv('PASSPHRASE'),
+            'enableRateLimit': True,
+            'proxies': proxies,  # 添加代理设置
+            'timeout': 30000,    # 设置超时时间为30秒
+            'options': {
+                'defaultType': 'spot',
+                'adjustForTimeDifference': True
+            }
+        })     
                           
 
     def get_eligible_symbols(self) -> List[str]:
@@ -86,19 +108,16 @@ class VirtualTradingStrategy:
 
     def place_virtual_orders(self, symbols: List[str]):
         """创建虚拟订单"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
+                
         for symbol in symbols:
             try:
                 # 检查是否已经有相同币种的持仓
-                cursor.execute('''
-                SELECT COUNT(*) FROM virtual_active_positions WHERE symbol = ?
-                ''', (symbol,))
-                
-                if cursor.fetchone()[0] > 0:
-                    continue
-                
+                query = text('''
+                SELECT COUNT(*) FROM virtual_active_positions WHERE symbol = :symbol
+                ''')
+                df = pd.read_sql(query, self.engine, params={'symbol': symbol})
+                if df.empty:
+                    logging.error(f"未找到订单信息:  symbol={self.symbol}")
                 # 获取当前市场价格
                 ticker = self.exchange.fetch_ticker(symbol)
                 current_price = ticker['last']
@@ -107,32 +126,44 @@ class VirtualTradingStrategy:
                 position_size = self.initial_balance * self.position_size_per_trade
                 
                 # 记录虚拟订单
-                cursor.execute('''
+                sql = text('''
                 INSERT INTO virtual_active_positions 
                 (symbol, entry_price, entry_time, position_size, leverage, 
                 last_price, last_update_time, unrealized_pnl, unrealized_roi)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    symbol, current_price, datetime.now(), position_size, 
-                    self.leverage, current_price, datetime.now(), 0.0, 0.0
-                ))
+                VALUES (:symbol, :current_price, :entry_time, :position_size, 
+                    :leverage, :current_price, :last_update_time, :unrealized_pnl, :unrealized_roi)
+                ''')
+                
+                self.session.execute(
+                    sql,
+                    {
+                        'symbol': symbol,
+                        'entry_price': current_price,
+                        'entry_time': datetime.now(),
+                        'position_size': position_size,
+                        'leverage': self.leverage,
+                        'last_price': current_price,
+                        'last_update_time': datetime.now(),
+                        'unrealized_pnl': 0.0,
+                        'unrealized_roi': 0.0
+                    }
+                )
+                self.session.commit()
                 
             except Exception as e:
                 print(f"虚拟下单失败 {symbol}: {str(e)}")
         
-        conn.commit()
-        conn.close()
+        
 
     def monitor_virtual_positions(self):
         """监控虚拟持仓"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        
         
         # 获取所有活跃持仓
-        cursor.execute('SELECT * FROM virtual_active_positions')
-        active_positions = cursor.fetchall()
+        query = text('SELECT * FROM virtual_active_positions')
+        df = pd.read_sql(query, self.engine)
         
-        for position in active_positions:
+        for position in df:
             position_id = position[0]
             symbol = position[1]
             entry_price = position[2]
@@ -148,12 +179,22 @@ class VirtualTradingStrategy:
                 unrealized_roi = unrealized_pnl / (position_size / self.leverage)
                 
                 # 更新持仓信息
-                cursor.execute('''
+                current_time = datetime.now()
+                sql = '''
                 UPDATE virtual_active_positions 
-                SET last_price = ?, last_update_time = ?, 
-                    unrealized_pnl = ?, unrealized_roi = ?
-                WHERE id = ?
-                ''', (current_price, datetime.now(), unrealized_pnl, unrealized_roi, position_id))
+                SET last_price = :current_price, last_update_time = :current_time, 
+                    unrealized_pnl = :unrealized_pnl, unrealized_roi = :unrealized_roi
+                WHERE id = :position_id
+                '''
+                
+                self.session.execute
+                (
+                    text(sql),
+                    {
+                        'symbol': symbol,
+                        'updated_at': current_time
+                    }
+                )
                 
                 # 检查止损条件
                 if unrealized_roi < -self.stop_loss_threshold:
@@ -174,24 +215,21 @@ class VirtualTradingStrategy:
             except Exception as e:
                 print(f"监控失败 {symbol}: {str(e)}")
         
-        conn.commit()
-        conn.close()
+      
 
     def _close_virtual_position(self, position_id: int, exit_price: float, reason: str):
         """平掉虚拟持仓"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
         
         # 获取持仓信息
-        cursor.execute('SELECT * FROM virtual_active_positions WHERE id = ?', (position_id,))
-        position = cursor.fetchone()
+        query = text('SELECT * FROM virtual_active_positions WHERE id = :position_id')
+        df = pd.read_sql(query, self.engine, params={'position_id': position_id})
         
-        if position:
-            symbol = position[1]
-            entry_price = position[2]
-            entry_time = position[3]
-            position_size = position[4]
-            leverage = position[5]
+        if df:
+            symbol = df[1]
+            entry_price = df[2]
+            entry_time = df[3]
+            position_size = df[4]
+            leverage = df[5]
             
             # 计算最终盈亏
             pnl = (entry_price - exit_price) * position_size * leverage
@@ -199,73 +237,104 @@ class VirtualTradingStrategy:
             success = 1 if pnl > 0 else 0
             
             # 记录交易结果
-            cursor.execute('''
+            sql ='''
             INSERT INTO virtual_trade_records 
             (symbol, entry_price, entry_time, exit_price, exit_time, 
             position_size, leverage, pnl, roi, status, close_reason, success)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                symbol, entry_price, entry_time, exit_price, datetime.now(),
-                position_size, leverage, pnl, roi, 'closed', reason, success
-            ))
+            VALUES (:symbol, :entry_price, :entry_time, :exit_price, :exit_time,
+            :position_size, :leverage, :pnl, :roi, :status, :reason, :success
+            )
+            '''
             
+            self.session.execute(
+                    sql,
+                    {
+                        'symbol': symbol,
+                        'entry_price': entry_price,
+                        'entry_time': entry_time,
+                        'exit_price': exit_price,
+                        'exit_time': datetime.now(),
+                        'position_size': position_size,
+                        'leverage': leverage,
+                        'pnl': pnl,
+                        'roi': roi,
+                        'status': 'closed',
+                        'reason': reason,
+                        'success': success
+                    }
+                )
+            self.session.commit()
             # 删除活跃持仓
-            cursor.execute('DELETE FROM virtual_active_positions WHERE id = ?', (position_id,))
+            sql = '''DELETE FROM virtual_active_positions WHERE id = :position_id'''
+            self.session.execute(
+                sql,
+                {position_id}
+            )
             
             # 更新策略性能记录
             self._update_strategy_performance()
         
-        conn.commit()
-        conn.close()
-
     def _update_strategy_performance(self):
         """更新策略性能统计"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
         
         today = datetime.now().date()
         
         # 获取今日交易统计
-        cursor.execute('''
+        sql = '''
         SELECT COUNT(*) as total,
                SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as wins,
                SUM(pnl) as daily_pnl
         FROM virtual_trade_records 
         WHERE date(exit_time) = date('now')
-        ''')
+        '''
         
-        result = cursor.fetchone()
-        total_trades, winning_trades, daily_pnl = result
+        df = pd.read_sql(sql, self.engine)
+        total, wins, daily_pnl = df
         
-        if total_trades:
-            win_rate = winning_trades / total_trades
+        if total:
+            win_rate = wins / total
         else:
             win_rate = 0
             
         # 获取当前余额
-        cursor.execute('''
+        query = '''
         SELECT SUM(pnl) FROM virtual_trade_records
-        ''')
-        total_pnl = cursor.fetchone()[0] or 0
+        '''
+        total_pnl = pd.read_sql(query, self.engine)
         current_balance = self.initial_balance + total_pnl
         
         # 更新性能记录
-        cursor.execute('''
-        INSERT OR REPLACE INTO strategy_performance 
-        (date, balance, daily_pnl, total_positions, winning_positions, win_rate)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ''', (today, current_balance, daily_pnl, total_trades, winning_trades, win_rate))
-        
-        conn.commit()
-        conn.close()
+        query1 = '''
+        INSERT INTO strategy_performance 
+        (strategy_name, date, balance, daily_pnl, total_positions, winning_positions, win_rate)
+        VALUES (:strategy_name, :today, :balance, :daily_pnl, :total, :wins, :win_rate)
+        ON CONFLICT (strategy_name,date) 
+        DO UPDATE SET 
+            balance = EXCLUDED.balance
+            daily_pnl = EXCLUDED.daily_pnl,
+            total_positions = EXCLUDED.total_positions,
+            winning_positions = EXCLUDED.winning_positions,
+            win_rate = EXCLUDED.win_rate
+        '''
+        self.session.execute(
+                    query1,
+                    {
+                        'strategy_name': 'ma60short',
+                        'today': today,
+                        'balance': current_balance,
+                        'daily_pnl': daily_pnl,
+                        'total': total,
+                        'wins': wins,
+                        'win_rate': win_rate
+                    }
+                )
+      
 
     def get_strategy_performance(self) -> Dict:
         """获取策略性能统计"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
         
         # 获取总体统计
-        cursor.execute('''
+        query = '''
         SELECT 
             COUNT(*) as total_trades,
             SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as winning_trades,
@@ -273,21 +342,19 @@ class VirtualTradingStrategy:
             AVG(CASE WHEN success = 1 THEN roi ELSE NULL END) as avg_win,
             AVG(CASE WHEN success = 0 THEN roi ELSE NULL END) as avg_loss
         FROM virtual_trade_records
-        ''')
+        '''
+        df = pd.read_sql(query, self.engine)
         
-        result = cursor.fetchone()
-        total_trades, winning_trades, total_pnl, avg_win, avg_loss = result
+        total_trades, winning_trades, total_pnl, avg_win, avg_loss = df
         
         # 获取当前活跃持仓数
-        cursor.execute('SELECT COUNT(*) FROM virtual_active_positions')
-        active_positions = cursor.fetchone()[0]
+        query1 = 'SELECT COUNT(*) FROM virtual_active_positions'
+        active_positions = pd.read_sql(query1, self.engine)
         
         # 计算其他指标
         win_rate = winning_trades / total_trades if total_trades > 0 else 0
         current_balance = self.initial_balance + (total_pnl or 0)
         total_return = (current_balance / self.initial_balance - 1) * 100
-        
-        conn.close()
         
         return {
             'total_trades': total_trades,
@@ -301,15 +368,17 @@ class VirtualTradingStrategy:
             'avg_loss': avg_loss
         }
 
-        def run(self, check_interval: int = 300):
+    def run(self, check_interval: int = 300):
         """运行策略"""
-        print("开始运行虚拟交易策略...")
+        logging.basicConfig(filename=f'ma60short_strategy.log', level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+        logging.info('脚本开始执行')
         
         while True:
             try:
                 # 获取符合条件的交易对
                 eligible_symbols = self.get_eligible_symbols()
-                print(f"找到 {len(eligible_symbols)} 个符合条件的交易对")
+                logging.info(f"找到 {len(eligible_symbols)} 个符合条件的交易对")
                 
                 # 创建虚拟订单
                 self.place_virtual_orders(eligible_symbols)
@@ -319,27 +388,27 @@ class VirtualTradingStrategy:
                 
                 # 打印策略表现
                 performance = self.get_strategy_performance()
-                print(f"\n策略表现统计:")
-                print(f"总交易次数: {performance['total_trades']}")
-                print(f"盈利交易数: {performance['winning_trades']}")
-                print(f"胜率: {performance['win_rate']*100:.2f}%")
-                print(f"总盈亏: {performance['total_pnl']:.2f} USDT")
-                print(f"当前余额: {performance['current_balance']:.2f} USDT")
-                print(f"当前活跃持仓数: {performance['active_positions']}")
+                logging.info(f"\n策略表现统计:")
+                logging.info(f"总交易次数: {performance['total_trades']}")
+                logging.info(f"盈利交易数: {performance['winning_trades']}")
+                logging.info(f"胜率: {performance['win_rate']*100:.2f}%")
+                logging.info(f"总盈亏: {performance['total_pnl']:.2f} USDT")
+                logging.info(f"当前余额: {performance['current_balance']:.2f} USDT")
+                logging.info(f"当前活跃持仓数: {performance['active_positions']}")
                 
                 # 打印活跃持仓详情
                 self.print_active_positions()
                 
-                print(f"\n等待 {check_interval} 秒进行下一次检查...\n")
+                logging.info(f"\n等待 {check_interval} 秒进行下一次检查...\n")
                 time.sleep(check_interval)
                 
             except Exception as e:
-                print(f"策略运行错误: {str(e)}")
+                logging.info(f"策略运行错误: {str(e)}")
                 time.sleep(60)  # 发生错误时等待1分钟后继续
 
     def print_active_positions(self):
         """打印当前活跃持仓详情"""
-        conn = sqlite3.connect(self.db_path)
+        
         
         # 获取所有活跃持仓
         active_positions_df = pd.read_sql('''
@@ -354,29 +423,27 @@ class VirtualTradingStrategy:
             unrealized_pnl,
             unrealized_pnl_percentage
         FROM virtual_active_positions
-        ''', conn)
+        ''', self.engine)
         
         if not active_positions_df.empty:
-            print("\n当前活跃持仓:")
+            logging.info("\n当前活跃持仓:")
             for _, position in active_positions_df.iterrows():
                 holding_time = datetime.now() - datetime.strptime(position['entry_time'], 
                                                                 '%Y-%m-%d %H:%M:%S.%f')
-                print(f"\n{position['symbol']}:")
-                print(f"  入场价格: {position['entry_price']:.4f}")
-                print(f"  当前价格: {position['last_price']:.4f}")
-                print(f"  持仓规模: {position['position_size']:.2f}")
-                print(f"  杠杆倍数: {position['leverage']}x")
-                print(f"  未实现盈亏: {position['unrealized_pnl']:.2f} USDT ({position['unrealized_pnl_percentage']:.2f}%)")
-                print(f"  持仓时间: {holding_time.days}天 {holding_time.seconds//3600}小时")
+                logging.info(f"\n{position['symbol']}:")
+                logging.info(f"  入场价格: {position['entry_price']:.4f}")
+                logging.info(f"  当前价格: {position['last_price']:.4f}")
+                logging.info(f"  持仓规模: {position['position_size']:.2f}")
+                logging.info(f"  杠杆倍数: {position['leverage']}x")
+                logging.info(f"  未实现盈亏: {position['unrealized_pnl']:.2f} USDT ({position['unrealized_pnl_percentage']:.2f}%)")
+                logging.info(f"  持仓时间: {holding_time.days}天 {holding_time.seconds//3600}小时")
         else:
-            print("\n当前没有活跃持仓")
+            logging.info("\n当前没有活跃持仓")
         
-        conn.close()
 
     def get_detailed_report(self, start_date=None, end_date=None):
         """获取详细的策略报告"""
-        conn = sqlite3.connect(self.db_path)
-        
+                
         query = '''
         SELECT 
             date(exit_time) as trade_date,
@@ -397,7 +464,7 @@ class VirtualTradingStrategy:
         
         query += " GROUP BY date(exit_time) ORDER BY date(exit_time)"
         
-        daily_stats = pd.read_sql(query, conn)
+        daily_stats = pd.read_sql(query, self.engine)
         
         # 计算累计统计
         total_stats = {
@@ -421,7 +488,6 @@ class VirtualTradingStrategy:
                                       abs(daily_stats[daily_stats['daily_pnl'] < 0]['daily_pnl'].sum())
                                       if abs(daily_stats[daily_stats['daily_pnl'] < 0]['daily_pnl'].sum()) > 0 else float('inf'))
         
-        conn.close()
         
         return {
             'daily_stats': daily_stats,
