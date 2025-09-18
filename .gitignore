@@ -6,3 +6,10 @@ TRX-USDT_rade_strategy.log
 .vscode/launch.json
 klines.log
 ma60_strategy.log
+.env
+1m_klines.log
+capvalue.log
+realtime.log
+watchlist_update.log
+1d_klines.log
+

@@ -443,7 +443,7 @@ passphrase = ""
 proxies = 'http://127.0.0.1:7890'
 # WebSocket公共频道
 # 实盘
-url = "wss://ws.okx.com:8443/ws/v5/public"
+url = "wss://ws.okx.com:8443/ws/v5/business"
 # 模拟盘
 # url = "wss://ws.okex.com:8443/ws/v5/public?brokerId=9999"
 
@@ -465,11 +465,11 @@ url = "wss://ws.okx.com:8443/ws/v5/public"
 # 产品频道
 # channels = [{"channel": "instruments", "instType": "FUTURES"}]
 # 行情频道
-channels = [{"channel": "tickers", "instId": "BTC-USDT"}]
+#channels = [{"channel": "tickers", "instId": "BTC-USDT"}]
 # 持仓总量频道
 # channels = [{"channel": "open-interest", "instId": "BTC-USD-210326"}]
 # K线频道
-# channels = [{"channel": "candle1m", "instId": "BTC-USD-210326"}]
+channels = [{"channel": "candle1m", "instId": "BTC-USDT"}]
 # 交易频道
 # channels = [{"channel": "trades", "instId": "BTC-USD-201225"}]
 # 预估交割/行权价格频道

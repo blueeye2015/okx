@@ -81,7 +81,7 @@ if __name__ == '__main__':
     # market api
     marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 获取所有产品行情信息  Get Tickers
-    #result = marketAPI.get_tickers('SPOT')
+    result = marketAPI.get_tickers('SPOT')
     # 获取单个产品行情信息  Get Ticker
     #result = marketAPI.get_ticker('ETH-BTC')
     # 获取指数行情  Get Index Tickers
@@ -97,7 +97,7 @@ if __name__ == '__main__':
     # 获取标记价格K线数据  Get Mark Price Candlesticks
     #result = marketAPI.get_markprice_candlesticks('NEIRO-USDT',limit=1000,bar='1m')
     # 获取交易产品公共成交数据  Get Trades
-    result = marketAPI.get_trades('BTC-USDT', '500')
+    #result = marketAPI.get_trades('BTC-USDT', '500')
     #result = marketAPI.history_trades('BTC-USDT',limit='10',type=1,before=629871423)
 
     # public api
@@ -206,5 +206,8 @@ if __name__ == '__main__':
     #api= json.dumps(result)
     #api['data']
     # 提取并打印所有 instId
-    for item in result['data']:
-        print(item)
+    with open('symbol.txt', 'w', encoding='utf-8') as f:
+        for item in result['data']:
+            inst_id = item['instId']
+            if inst_id.lower().endswith('-usdt'):   # 排除以-usd结尾的
+                f.write(inst_id + '\n')
