@@ -5,11 +5,12 @@ import logging
 import clickhouse_connect
 
 # 导入我们的核心模块
-from momentum_scanner import scan_and_rank_momentum
+from momentum_scanner import scan_and_rank_momentum,_calculate_features_and_factor
 from trade_manager import TradeManager
 
 # --- 全局回测配置 ---
 CLICKHOUSE_CONFIG = {'host': '127.0.0.1', 'port': 8123, 'user': 'default', 'password': '12'}
+WARMUP_START_DATE = '2023-01-01' 
 BACKTEST_START_DATE = '2024-01-01'
 BACKTEST_END_DATE = '2025-09-20'
 INITIAL_CASH = 100000.0
@@ -18,29 +19,44 @@ REBALANCE_DAYS = 7
 # --- Backtrader 策略 ---
 class MomentumPortfolioStrategy(bt.Strategy):
     params = (
-        ('signals_df', None),
+        ('all_historical_data', None),
+        ('all_symbols', None), # <-- 补上缺失的声明
         ('trade_manager', None),
     )
 
     def __init__(self):
         self.rebalance_counter = 0
-        self.signals = self.p.signals_df.set_index('symbol')
         self.tm = self.p.trade_manager
-        # 创建一个字典，便于通过名字快速访问数据源
         self.d_names = {d._name: d for d in self.datas}
+        self.all_historical_data = self.p.all_historical_data
+        self.all_symbols = self.p.all_symbols
 
     def next(self):
         self.rebalance_counter += 1
         if self.rebalance_counter % REBALANCE_DAYS != 0:
             return
 
-        current_date_str = self.datetime.date(0).isoformat()
-        logging.warning(f"\n--- 调仓日: {current_date_str} ---")
+        current_date = self.datetime.date(0)
+        if current_date < pd.to_datetime(BACKTEST_START_DATE).date():
+            return
+        logging.warning(f"\n--- 调仓日: {current_date.isoformat()} ---")
 
-        current_ranks = self.signals.rename(columns={'RVol': 'rank'})
+        # 1. 截取直到“今天”为止的所有历史数据
+        historical_data_today = self.all_historical_data[self.all_historical_data['timestamp'] <= pd.to_datetime(current_date)]
+        
+       # 2. 在“今天”这个时间点上，重新运行因子扫描
+        logging.info("正在为当前调仓日动态计算因子排名...")
+        current_ranks_df = self.scan_and_rank_in_memory(historical_data_today, self.all_symbols)
+        if current_ranks_df.empty:
+            logging.warning("当前日期无法生成有效信号，清空所有持仓。")
+            for symbol in list(self.getpositions().keys()): # 获取当前持仓的拷贝
+                self.close(data=self.d_names[symbol])
+            return
+
+        current_ranks = current_ranks_df.set_index('symbol').rename(columns={'RVol': 'rank'})
         
         # --- 再平衡：卖出不符合条件的持仓 ---
-        open_symbols_before_sell = [d._name for d in self.datas if self.getposition(d).size > 0]
+        open_symbols_before_sell = [d._name for d in self.datas if self.getpositionbyname(d._name).size]
         for symbol in open_symbols_before_sell:
             if symbol in current_ranks.index:
                 rank_info = current_ranks.loc[symbol]
@@ -82,8 +98,31 @@ class MomentumPortfolioStrategy(bt.Strategy):
                     open_counts[category] += 1
                     open_positions_symbols.add(symbol)
 
+    # 将 momentum_scanner 的核心逻辑直接集成到策略内部，以便在回测的每一天调用
+    def scan_and_rank_in_memory(self, all_data_df, symbols_list):
+        results = []
+        for symbol in symbols_list:
+            group = all_data_df[all_data_df['symbol'] == symbol]
+            if not group.empty:
+                res = _calculate_features_and_factor(group)
+                if res is not None:
+                    res['symbol'] = symbol
+                    results.append(res)
+        if not results: return pd.DataFrame()
+        results_df = pd.DataFrame(results)
+        signal_df = pd.DataFrame({
+            'symbol': results_df['symbol'],
+            'current_price': results_df['latest_price'],
+            'RVol': results_df['factor']
+        })
+        return signal_df.sort_values('RVol', ascending=False).reset_index(drop=True)
+
+# 全局变量，用于在策略中访问
+all_prices_df = None
 
 def run_backtrader():
+    global all_prices_df
+
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     
     # --- 1. 数据准备 ---
@@ -92,49 +131,58 @@ def run_backtrader():
     all_symbols_query = "SELECT DISTINCT symbol FROM marketdata.okx_klines_1d WHERE symbol LIKE '%-USDT'"
     symbols_list = [row[0] for row in ch_client.query(all_symbols_query).result_rows]
     
-    ranked_signals_df = scan_and_rank_momentum(ch_client, symbols_list)
-    symbols_with_signal = ranked_signals_df['symbol'].unique().tolist()
     
-    all_prices_query = f"SELECT timestamp, symbol, open, high, low, close, volume FROM marketdata.okx_klines_1d WHERE symbol IN {tuple(symbols_with_signal)}"
+    all_prices_query = f"SELECT timestamp, symbol, open, high, low, close, volume FROM marketdata.okx_klines_1d WHERE symbol IN {tuple(symbols_list)} AND timestamp >= toDateTime('{WARMUP_START_DATE}')"
     all_prices_df = ch_client.query_df(all_prices_query)
-    all_prices_df['datetime'] = pd.to_datetime(all_prices_df['timestamp'])
-    all_prices_df = all_prices_df.drop(columns=['timestamp'])
+    all_prices_df['timestamp'] = pd.to_datetime(all_prices_df['timestamp'])
+    # --- 核心修正点在这里 ---
+    # 策略内部用于计算的 all_historical_data 也必须与 backtrader 的“天真”时间系统兼容。
+    # 在传递给策略之前，统一将它的时区信息剥离。
+    if all_prices_df['timestamp'].dt.tz is not None:
+        logging.info("检测到 'timestamp' 列包含时区信息，正在将其转换为时区天真(naive)类型...")
+        all_prices_df['timestamp'] = all_prices_df['timestamp'].dt.tz_localize(None)
+
 
     # --- 2. 初始化Backtrader引擎 ---
     cerebro = bt.Cerebro()
     cerebro.broker.set_cash(INITIAL_CASH)
     cerebro.broker.setcommission(commission=0.001)
 
-    # --- 3. 为每个币种添加数据到引擎中 ---
-    # ###################### 核心修正点在这里 ######################
-    successfully_loaded_symbols = set() # 创建一个集合来记录成功加载的币种
-    # #############################################################
-    
-    logging.info(f"正在向Backtrader引擎添加 {len(symbols_with_signal)} 个币种的数据...")
-    for symbol in symbols_with_signal:
-        df = all_prices_df[all_prices_df['symbol'] == symbol]
-        # 增加去重逻辑，作为双重保险
-        df = df.drop_duplicates(subset=['datetime'], keep='last')
+  
+    logging.info(f"正在向Backtrader引擎添加 {len(symbols_list)} 个币种的数据...")
+    date_index = pd.date_range(start=WARMUP_START_DATE, end=BACKTEST_END_DATE, freq='D')
+    for symbol in symbols_list:
+        df = all_prices_df[all_prices_df['symbol'] == symbol].set_index('timestamp')
+        if df.empty: continue
+         #    这样 '2024-02-01 00:00:00+08:00' 就变成了 '2024-02-01 00:00:00'
+        if df.index.tz is not None:
+            df.index = df.index.tz_localize(None)
         
-        if not df.empty:
+        # 2. 标准化到午夜，确保能和 date_index 的每日零点对齐
+        df.index = df.index.normalize()
+        
+        df = df[~df.index.duplicated(keep='last')]
+        df_aligned = df.reindex(date_index)
+        df_aligned[['open', 'high', 'low', 'close']] = df_aligned[['open', 'high', 'low', 'close']].ffill()
+        df_aligned['open'].fillna(df_aligned['close'], inplace=True)
+        df_aligned['high'].fillna(df_aligned['close'], inplace=True)
+        df_aligned['low'].fillna(df_aligned['close'], inplace=True)
+        df_aligned['volume'].fillna(0, inplace=True)
+        df_aligned.dropna(subset=['close'], inplace=True)
+        
+        if not df_aligned.empty:
             data_feed = bt.feeds.PandasData(
-                dataname=df.set_index('datetime'), # 在传入时再设置索引
+                dataname=df_aligned, # 在传入时再设置索引
                 datetime=None, open='open', high='high', low='low', close='close', volume='volume',
                 openinterest=-1
             )
             cerebro.adddata(data_feed, name=symbol)
-            successfully_loaded_symbols.add(symbol) # 记录成功
-
-    logging.info(f"成功向引擎加载了 {len(successfully_loaded_symbols)} 个币种的数据。")
-
-    # --- 4. 添加策略 ---
-    # 【关键安全检查】只把成功加载了数据的信号传入策略
-    final_signals_df = ranked_signals_df[ranked_signals_df['symbol'].isin(successfully_loaded_symbols)]
-    
+               
     tm_for_logic = TradeManager(ch_client, trading_client=None, dry_run=True)
     tm_for_logic.open_positions = {}
     cerebro.addstrategy(MomentumPortfolioStrategy, 
-                        signals_df=final_signals_df, 
+                        all_historical_data=all_prices_df,
+                        all_symbols=symbols_list, # <-- 不再传递一次性算好的信号
                         trade_manager=tm_for_logic)
 
     # ... (分析器和报告部分与上一版相同，无需修改)
