@@ -10,9 +10,10 @@ from dotenv import load_dotenv
 import os
 
 if __name__ == '__main__':
-    api_key = "ba7f444f-e83e-4dd1-8507-bf8dd9033cbc"
-    secret_key = "D5474EF76B0A7397BFD26B9656006480"
-    passphrase = "TgTB+pJoM!d20F"
+    load_dotenv('.env')
+    api_key = os.getenv('API_KEY')
+    secret_key = os.getenv('SECRET_KEY')
+    passphrase = os.getenv('PASSPHRASE')
     # 设置代理
     proxies = {
     'http': 'http://127.0.0.1:7890',
@@ -81,9 +82,9 @@ if __name__ == '__main__':
     # market api
     marketAPI = Market.MarketAPI(api_key, secret_key, passphrase, False, flag, proxies=proxies)
     # 获取所有产品行情信息  Get Tickers
-    result = marketAPI.get_tickers('SPOT')
+    #result = marketAPI.get_tickers('SPOT')
     # 获取单个产品行情信息  Get Ticker
-    #result = marketAPI.get_ticker('ETH-BTC')
+    result = marketAPI.get_ticker('ALPHA-USDT')
     # 获取指数行情  Get Index Tickers
     # result = marketAPI.get_index_ticker('BTC', 'BTC-USD')
     # 获取产品深度  Get Order Book

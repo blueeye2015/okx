@@ -10,11 +10,12 @@ import clickhouse_connect
 import pandas as pd
 import pytz # <--- 1. 导入新库
 from trade_executor import TradingClient
+from trade_manager import TradeManager # 导入交易大脑
 
 # --- 配置区 ---
 # (配置参数保持不变)
 CH_HOST, CH_PORT, CH_DATABASE, CH_USERNAME, CH_PASSWORD = 'localhost', 8123, 'marketdata', 'default', '12'
-SPIKE_THRESHOLD, POSITION_USDT_SIZE, TAKE_PROFIT_PCT, STOP_LOSS_PCT = 0.10, 100.0, 0.25, 0.08
+SPIKE_THRESHOLD, POSITION_USDT_SIZE, TAKE_PROFIT_PCT, STOP_LOSS_PCT = 0.10, 50.0, 0.25, 0.08
 SCAN_AT_SECOND = 2 
 SHANGHAI_TZ = pytz.timezone('Asia/Shanghai') # <--- 2. 定义时区对象
 now_aware = datetime.datetime.now(SHANGHAI_TZ) # <--- 3. 使用带时区的 now()
@@ -294,6 +295,40 @@ class SpikeTrader:
             except Exception as e:
                 logging.error(f"主循环发生严重错误: {e}")
 
+    def main_loop(self,dry_run_mode=True):
+        # 注册信号处理器
+        signal.signal(signal.SIGINT, self.shutdown)
+        signal.signal(signal.SIGTERM, self.shutdown)
+
+        if not self.ch_client: return
+
+        # 只初始化一次交易管理器
+        trade_manager = TradeManager(self.ch_client, dry_run=dry_run_mode)
+        
+        while True:
+            now = datetime.datetime.now()
+            seconds_to_wait = (60 - now.second - 1) + (1 - now.microsecond / 1_000_000) + SCAN_AT_SECOND
+            if seconds_to_wait < 0: seconds_to_wait += 60
+
+            logging.info(f"等待 {seconds_to_wait:.2f} 秒... 当前持仓: {len(self.open_positions)}, 待处理: {len(self.pending_orders)}")
+            time.sleep(seconds_to_wait)
+
+            if self.ch_client:
+                try:
+                    # 1. 让交易大脑去管理持仓 (止盈止损)
+                    trade_manager.manage_open_positions()
+
+                    # 2. 扫描新信号
+                    signals_df = self.scan_for_spikes()
+                    if signals_df is not None and not signals_df.empty:
+                        # 3. 将新信号交给交易大脑处理 (建仓)
+                        trade_manager.process_new_signals(signals_df)
+                finally:
+                    self.ch_client.close()
+                    logging.info("本轮扫描/监控完成。")
+           
+
 if __name__ == "__main__":
     trader = SpikeTrader()
-    trader.run()
+    #trader.run()
+    trader.main_loop(dry_run_mode=False)

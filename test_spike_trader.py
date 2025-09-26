@@ -1,124 +1,107 @@
 # test_spike_trader.py
 
 import logging
-import datetime
-import uuid
-import pandas as pd # 需要pandas来插入测试数据
-from unittest.mock import MagicMock
-from spike_trader import SpikeTrader, get_clickhouse_client # 导入主类和数据库连接
+import pandas as pd
+import clickhouse_connect
+from trade_manager import TradeManager # 导入我们的大脑
 
-# 从您的主策略文件中导入SpikeTrader类
-from spike_trader import SpikeTrader
-
-# --- 日志配置 ---
+# 日志配置
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# --- 模拟组件 ---
-
-class MockTradingClient:
-    """一个模拟的交易客户端，用于测试，不会发送真实订单。"""
-    def __init__(self):
-        self.submitted_orders = {}
-        logging.info("【测试模式】模拟交易客户端已初始化。")
-
-    def place_market_order(self, symbol, side, size, client_order_id):
-        logging.warning(f"【测试模式】模拟下单: {side.upper()} {size:.6f} {symbol} (ID: {client_order_id})")
-        # 模拟交易所接受订单
-        self.submitted_orders[client_order_id] = {
-            'symbol': symbol,
-            'side': side,
-            'size': size,
-            'status': 'submitted'
-        }
-        # 模拟API成功返回
-        return {'code': '0', 'data': [{'ordId': f'sim_{uuid.uuid4().hex[:8]}', 'clOrdId': client_order_id}]}
-
-    def check_order_status(self, symbol, client_order_id):
-        logging.info(f"【测试模式】模拟查询订单: {client_order_id}")
-        if client_order_id in self.submitted_orders:
-            # 模拟订单已成交
-            order = self.submitted_orders[client_order_id]
-            return {
-                'state': 'filled',
-                'avgPx': str(110.0), # 假设成交价为 110
-                'accFillSz': str(order['size']),
-                'ordId': f'sim_{uuid.uuid4().hex[:8]}'
-            }
+def get_clickhouse_client():
+    """连接到ClickHouse"""
+    try:
+        # 确保这里的连接信息是正确的
+        client = clickhouse_connect.get_client(
+            host='localhost', port=8123, database='marketdata',
+            username='default', password='12')
+        return client
+    except Exception as e:
+        logging.error(f"连接ClickHouse失败: {e}")
         return None
 
-def setup_test_data(client, symbol, spike_price):
-    """向数据库插入一条用于触发信号的测试K线"""
-    logging.info(f"正在向数据库插入测试数据 for {symbol}...")
-    try:
-        # 清理可能存在的旧测试数据
-        client.command(f"ALTER TABLE marketdata.okx_klines_1m DELETE WHERE symbol = '{symbol}' SETTINGS mutations_sync=2")
-        
-        # 构造一条暴涨超过10%的K线 (100 -> 110.1)
-        test_kline = [{
-            'timestamp': datetime.datetime.now() - datetime.timedelta(minutes=1),
-            'symbol': symbol,
-            'open': spike_price * 0.9, # 100
-            'high': spike_price,       # 110.1
-            'low': spike_price * 0.9,  # 100
-            'close': spike_price,      # 110.1
-            'volume': 50000
-        }]
-        client.insert_df('marketdata.okx_klines_1m', pd.DataFrame(test_kline))
-        logging.info("测试数据插入成功！")
-    except Exception as e:
-        logging.error(f"插入测试数据失败: {e}")
-        raise
+def create_mock_signals():
+    """创建一个包含各种币种的模拟信号 DataFrame"""
+    data = {
+        'symbol': [
+            'BTC-USDT-SWAP', # Large Cap
+            'ETH-USDT-SWAP', # Large Cap
+            'SOL-USDT-SWAP', # Mid Cap
+            'DOGE-USDT-SWAP',# Mid Cap
+            'PEPE-USDT',     # Small Cap
+            'ORDI-USDT',     # Small Cap
+            'MERL-USDT',     # Small Cap
+            'WIF-USDT-SWAP', # Small Cap
+            'NOT-USDT',      # Mid Cap
+            'TON-USDT'       # Large Cap
+        ],
+        'current_price': [
+            68000, 3500, 160, 0.15, 0.000012, 40, 0.3, 2.5, 0.015, 7.5
+        ],
+        'RVol': [ # 我们故意让一些小市值的RVol更高，测试排序
+            3.1, 3.5, 4.0, 3.8, 5.5, 4.8, 6.0, 5.2, 3.2, 3.3
+        ]
+    }
+    df = pd.DataFrame(data)
+    logging.info("已创建模拟信号 DataFrame:")
+    print(df.to_string())
+    return df
 
-# --- 主测试流程 ---
-def run_full_test():
+def run_simulation():
+    """运行完整的交易逻辑模拟演习"""
+    ch_client = get_clickhouse_client()
+    if not ch_client:
+        logging.error("无法连接到数据库，测试终止。")
+        return
+
+    # 1. 初始化交易管理器，强制使用“空跑模式”
+    trade_manager = TradeManager(ch_client, dry_run=True)
+    
+    # 2. 创建模拟信号
+    mock_signals_df = create_mock_signals()
+
+    # --- 场景一: 初始没有任何持仓 ---
     print("\n" + "="*50)
-    print("--- 开始全流程自动化测试 ---")
-    print("="*50 + "\n")
+    logging.warning("场景一: 初始没有任何持仓，处理10个新信号")
+    print("="*50)
+    
+    trade_manager.process_new_signals(mock_signals_df)
+    
+    print("\n--- 场景一结束后，当前模拟持仓 ---")
+    print(trade_manager.open_positions)
+    expected_count = trade_manager.total_max_positions
+    print(f"预期持仓数量: {expected_count} | 实际持仓数量: {len(trade_manager.open_positions)}")
+    if len(trade_manager.open_positions) == expected_count:
+        logging.info("场景一测试通过: 持仓数量符合预期。")
+    else:
+        logging.error("场景一测试失败: 持仓数量不符合预期！")
 
-    # 1. 初始化
-    test_symbol = 'TEST-USDT-SWAP'
-    mock_trader = MockTradingClient()
-    strategy_bot = SpikeTrader(trading_client=mock_trader)
-    
-    # 2. 准备数据
-    setup_test_data(strategy_bot.ch_client, test_symbol, 110.1)
 
-    # --- 3. 模拟一分钟的完整流程 ---
-    
-    # a. 扫描信号并下单
-    print("\n--- [测试步骤1/3] 扫描信号并执行买入 ---")
-    strategy_bot.scan_for_spikes()
-    assert len(strategy_bot.pending_orders) == 1, "测试失败：未将订单加入待处理列表！"
-    print("✅ 成功：策略已发现信号并提交模拟订单。")
-
-    # b. 确认订单成交
-    print("\n--- [测试步骤2/3] 确认订单成交状态 ---")
-    pending_id = list(strategy_bot.pending_orders.keys())[0]
-    strategy_bot.pending_orders[pending_id]['entry_time'] -= datetime.timedelta(seconds=61)
-    strategy_bot.check_pending_orders()
-    assert len(strategy_bot.pending_orders) == 0, "测试失败：未从待处理列表移除订单！"
-    assert len(strategy_bot.open_positions) == 1, "测试失败：未将订单移入持仓列表！"
-    print("✅ 成功：订单已确认为成交，并加入持仓监控。")
-    
-    # c. 监控持仓并触发止损
-    print("\n--- [测试步骤3/3] 监控持仓并触发止损 ---")
-    # 模拟价格下跌超过8%
-    position = strategy_bot.open_positions[test_symbol]
-    stop_loss_price = position['entry_price'] * (1 - 0.09)
-    mock_prices = {test_symbol: stop_loss_price}
-    
-    # 【核心修正】: 将模拟价格传入监控函数
-    strategy_bot.manage_positions(current_prices=mock_prices)
-    
-    assert len(strategy_bot.open_positions) == 0, "测试失败：未能成功触发止损平仓！"
-    print("✅ 成功：策略已监控到价格下跌并执行模拟止损平仓。")
-
+    # --- 场景二: 已有部分持仓 ---
     print("\n" + "="*50)
-    print("--- 所有测试步骤成功通过！ ---")
-    print("="*50 + "\n")
+    logging.warning("场景二: 已持有2个小市值和1个大市值币，再次处理10个新信号")
+    print("="*50)
 
+    # 手动设置一些已有的持仓
+    trade_manager.open_positions = {
+        'PEPE-USDT': {'entry_price': 0.000011, 'size': 9090909},
+        'WIF-USDT-SWAP': {'entry_price': 2.4, 'size': 41.67},
+        'BTC-USDT-SWAP': {'entry_price': 67000, 'size': 0.00149}
+    }
+    logging.info("已手动设置初始持仓:")
+    print(trade_manager.open_positions)
+    
+    trade_manager.process_new_signals(mock_signals_df)
 
-if __name__ == '__main__':
-    # 为了让测试能运行，需要一个 ClickHouse 的 DataFrame 模块
-    import pandas as pd
-    run_full_test()
+    print("\n--- 场景二结束后，当前模拟持仓 ---")
+    print(trade_manager.open_positions)
+    print(f"预期持仓数量: {expected_count} | 实际持仓数量: {len(trade_manager.open_positions)}")
+    if len(trade_manager.open_positions) == expected_count:
+        logging.info("场景二测试通过: 成功填补了剩余仓位。")
+    else:
+        logging.error("场景二测试失败: 持仓数量不符合预期！")
+
+    ch_client.close()
+
+if __name__ == "__main__":
+    run_simulation()

@@ -6,7 +6,7 @@ import clickhouse_connect
 import pandas as pd
 
 # --- 配置区 ---
-SYMBOL_FILE = "symbol.txt" # 我们关心的币种列表文件
+SYMBOL_FILE = "/data/okx/symbol.txt" # 我们关心的币种列表文件
 
 # 代理配置 (如果不需要，请设为 None)
 proxies = {

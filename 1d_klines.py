@@ -5,8 +5,8 @@ import logging
 import clickhouse_connect
 
 # --- 配置区 ---
-START_DATE = "2024-09-14" # 开始日期 (获取大约一年的数据)
-SYMBOL_FILE = "symbol.txt" # 存放币种列表的文件名
+START_DATE = "2022-09-14" # 开始日期 (获取大约一年的数据)
+SYMBOL_FILE = "/data/okx/symbol.txt" # 存放币种列表的文件名
 
 # ClickHouse数据库配置
 CH_HOST = 'localhost'

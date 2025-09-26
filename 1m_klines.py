@@ -34,7 +34,7 @@ last_flush_time = time.time()
 
 # --- 核心功能函数 ---
 
-def load_symbols(filename="symbol.txt"):
+def load_symbols(filename="/data/okx/symbol.txt"):
     """从文件中加载要订阅的交易对列表"""
     try:
         with open(filename, 'r') as f:

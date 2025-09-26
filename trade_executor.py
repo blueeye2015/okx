@@ -1,145 +1,167 @@
+# trade_executor.py
 import logging
 import time
 import os
-from okex.Trade_api import TradeAPI # 确保您的库路径正确
+from okex.Trade_api import TradeAPI 
 from okex.Market_api import MarketAPI
+from okex.Account_api import AccountAPI
 from dotenv import load_dotenv
 
 load_dotenv('.env')
-# --- 您的API凭证 ---
 
-API_KEY = os.getenv('API_KEY')
-SECRET_KEY = os.getenv('SECRET_KEY')
-PASSPHRASSE = os.getenv('PASSPHRASE')
-IS_DEMO = 0 # 1 for demo, 0 for real
-
-# 代理配置 (如果不需要，请设为 None)
-proxies = {
-            'http': 'http://127.0.0.1:7890',  # 根据你的实际代理地址修改
-            'https': 'http://127.0.0.1:7890'  # 根据你的实际代理地址修改
-        } 
 
 class TradingClient:
     def __init__(self):
         try:
-            self.trade_api = TradeAPI(API_KEY, SECRET_KEY, PASSPHRASSE, False, str(IS_DEMO),proxies)
-            self.market_api = MarketAPI(API_KEY, SECRET_KEY, PASSPHRASSE, False, str(IS_DEMO),proxies)
-            logging.info("交易客户端初始化成功。")
+            # --- API凭证 ---
+            API_KEY = os.getenv('API_KEY')
+            SECRET_KEY = os.getenv('SECRET_KEY')
+            PASSPHRASE = os.getenv('PASSPHRASE')
+            IS_DEMO = '0' # 默认为实盘
+            proxies = { 'http': 'http://127.0.0.1:7890', 'https': 'http://127.0.0.1:7890' } 
+
+            self.trade_api = TradeAPI(API_KEY, SECRET_KEY, PASSPHRASE, False, IS_DEMO , proxies=proxies)
+            self.market_api = MarketAPI(API_KEY, SECRET_KEY, PASSPHRASE, False, IS_DEMO, proxies=proxies)
+            self.account_api = AccountAPI(API_KEY, SECRET_KEY, PASSPHRASE, False, IS_DEMO, proxies=proxies)
+            logging.info(f"交易客户端初始化成功。模式: {'模拟' if IS_DEMO == '1' else '实盘'}")
         except Exception as e:
             logging.error(f"交易客户端初始化失败: {e}")
-            self.trade_api = None
-            self.market_api = None
+            raise # 初始化失败时直接抛出异常，让主程序停止
 
-    def place_limit_order(self, symbol, px, side, size, client_order_id):
-        if not self.trade_api:
-            logging.error("交易API未初始化，无法下单。")
-            return None
+    def get_usdt_balance(self):
+        """查询交易账户中可用的USDT余额。"""
         try:
-            logging.warning(f"准备下单: {side.upper()} {size:.6f} {symbol} (Client ID: {client_order_id})")
+            res = self.account_api.get_account()
+            if res and res.get('code') == '0':
+                for detail in res['data'][0]['details']:
+                    if detail['ccy'] == 'USDT':
+                        avail_balance = float(detail['availBal'])
+                        logging.info(f"查询到可用USDT余额: {avail_balance}")
+                        return avail_balance
+            logging.error(f"查询USDT余额失败: {res.get('msg', '未知错误')}")
+            return 0.0
+        except Exception as e:
+            logging.error(f"查询余额时发生异常: {e}", exc_info=True)
+            return 0.0
+        
+    def place_market_order_by_amount(self, symbol, side, amount_usdt, client_order_id):
+        """按金额（USDT）下市价单"""
+        try:
+            logging.warning(f"准备按金额下单: {side.upper()} {amount_usdt} USDT worth of {symbol} (Client ID: {client_order_id})")
             result = self.trade_api.place_order(
                 instId=symbol,
-                tdMode='cash',
+                tdMode='cash', # 使用全仓模式
                 side=side,
-                px=px,
-                ordType='limit',
-                sz=f"{size:.8f}", # 使用高精度字符串
+                ordType='market',
+                sz=str(amount_usdt), 
+                tgtCcy='quote_ccy' if side=='buy' else 'base_ccy' , # 指定sz的单位是计价货币(USDT)
                 clOrdId=client_order_id
             )
             logging.info(f"下单API返回: {result}")
-            if result and result.get('code') == '0':
-                order_id = result['data'][0]['ordId']
-                logging.warning(f"市价单 {side.upper()} {symbol} 提交成功! 交易所订单ID: {order_id}")
-                return result
-            else:
-                error_msg = result.get('msg', '未知错误')
-                logging.error(f"下单失败: {error_msg}")
-                return None
+            return result
         except Exception as e:
-            logging.error(f"执行下单时发生异常: {e}")
+            logging.error(f"执行按金额下单时发生异常: {e}")
             return None
-        
-    def place_market_order(self, symbol, side, size, client_order_id):
-        if not self.trade_api:
-            logging.error("交易API未初始化，无法下单。")
-            return None
+
+    def place_market_order_by_size(self, symbol, side, size, client_order_id):
+        """按数量（币）下市价单"""
         try:
-            logging.warning(f"准备下单: {side.upper()} {size:.6f} {symbol} (Client ID: {client_order_id})")
+            logging.warning(f"准备按数量下单: {side.upper()} {size} of {symbol} (Client ID: {client_order_id})")
             result = self.trade_api.place_order(
                 instId=symbol,
                 tdMode='cash',
                 side=side,
                 ordType='market',
-                sz=f"{size:.8f}", # 使用高精度字符串
+                sz=f"{size:.8f}", # 确保币的数量有足够精度
+                tgtCcy='quote_ccy' if side=='buy' else 'base_ccy' , # 指定sz的单位是计价货币(USDT)
                 clOrdId=client_order_id
             )
             logging.info(f"下单API返回: {result}")
-            if result and result.get('code') == '0':
-                order_id = result['data'][0]['ordId']
-                logging.warning(f"市价单 {side.upper()} {symbol} 提交成功! 交易所订单ID: {order_id}")
-                return result
-            else:
-                error_msg = result.get('msg', '未知错误')
-                logging.error(f"下单失败: {error_msg}")
-                return None
+            return result
         except Exception as e:
-            logging.error(f"执行下单时发生异常: {e}")
+            logging.error(f"执行按数量下单时发生异常: {e}")
             return None
+        
+    # ###################### 【核心修正】统一的限价单函数 ######################
+    def place_limit_order(self, symbol, side, size, price, client_order_id):
+        """
+        按指定的数量（币）和价格下限价单。
+        """
+        try:
+            logging.warning(f"准备下限价单: {side.upper()} {size:.8f} of {symbol} at price {price} (Client ID: {client_order_id})")
+            result = self.trade_api.place_order(
+                instId=symbol,
+                tdMode='cash',
+                side=side,
+                ordType='limit',
+                sz=f"{size:.8f}", # sz 永远是币的数量
+                px=str(price),    # 价格
+                clOrdId=client_order_id
+            )
+            logging.info(f"下单API返回: {result}")
+            return result
+        except Exception as e:
+            logging.error(f"执行限价单时发生异常: {e}", exc_info=True)
+            return None
+    # #####################################################################
 
-    def check_order_status(self, symbol, client_order_id):
-        if not self.trade_api:
-            logging.error("交易API未初始化，无法查询订单。")
+    def place_limit_order_by_size(self, symbol, side, size, client_order_id):
+        """按数量（币）下市价单"""
+        try:
+            logging.warning(f"准备按数量下单: {side.upper()} {size} of {symbol} (Client ID: {client_order_id})")
+            result = self.trade_api.place_order(
+                instId=symbol,
+                tdMode='cash',
+                side=side,
+                ordType='limit',
+                sz=f"{size:.8f}", # 确保币的数量有足够精度
+                clOrdId=client_order_id
+            )
+            logging.info(f"下单API返回: {result}")
+            return result
+        except Exception as e:
+            logging.error(f"执行按数量下单时发生异常: {e}")
+            return None
+            
+    # ###################### 【核心修正】获取单个币种价格的函数 ######################
+    def get_latest_price(self, symbol: str):
+        """
+        获取单个币种的最新成交价。
+        """
+        if not symbol: 
             return None
         try:
-            result = self.trade_api.get_orders(instId=symbol, clOrdId=client_order_id)
-            logging.info(f"查询订单 ({client_order_id}) API返回: {result}")
+            result = self.market_api.get_ticker(symbol)
             if result and result.get('code') == '0' and result['data']:
-                return result['data'][0] # 返回订单的详细信息
+                return float(result['data'][0]['last'])
             else:
-                logging.error(f"查询订单失败: {result.get('msg', '订单不存在或查询失败')}")
+                logging.error(f"获取 [{symbol}] 价格失败: {result.get('msg', '未知错误')}")
                 return None
         except Exception as e:
-            logging.error(f"查询订单时发生异常: {e}")
+            logging.error(f"获取 [{symbol}] 价格时发生异常: {e}")
             return None
+    # #####################################################################
+        # # 为提高效率，一次性获取所有SWAP产品的ticker
+        # try:
+        #     all_tickers_result = self.market_api.get_tickers('SPOT')
+        #     if all_tickers_result.get('code') == '0':
+        #         tickers_data = {ticker['instId']: float(ticker['last']) for ticker in all_tickers_result['data']}
+        #         for symbol in symbols:
+        #             if symbol in tickers_data:
+        #                 prices_dict[symbol] = tickers_data[symbol]
+        #             else:
+        #                 logging.warning(f"在批量获取的行情中未找到 [{symbol}] 的价格。")
+        #     else:
+        #         logging.error(f"批量获取行情失败: {all_tickers_result.get('msg')}")
+        #         # 降级为单个查询
+        #         for symbol in symbols_list:
+        #             result = self.market_api.get_ticker(symbol)
+        #             if result and result.get('code') == '0' and result['data']:
+        #                 prices_dict[symbol] = float(result['data'][0]['last'])
+        #             time.sleep(0.1)
+
+        # except Exception as e:
+        #     logging.error(f"获取最新价格时发生异常: {e}")
         
-    def get_latest_prices(self, symbols_list):
-        """
-        【新!】获取一个或多个币种的最新价格。
-        :param symbols_list: 一个包含交易对字符串的列表, e.g., ['BTC-USDT-SWAP', 'ETH-USDT-SWAP']
-        :return: 一个字典, key是交易对, value是最新价格, e.g., {'BTC-USDT-SWAP': 70000.1, ...}
-        """
-        if not self.market_api:
-            logging.error("行情API未初始化，无法获取价格。")
-            return {}
-        
-        if not symbols_list:
-            return {}
-
-        try:
-            # OKX API V5 不再支持在get_tickers的instId中传多个币种
-            # 我们需要循环查询，但这个库可能封装了批量查询
-            # 查阅您使用的库的文档，get_tickers的'instType'参数可以获取一类产品的行情
-            # 最直接的方式是循环获取单个ticker
-            
-            prices_dict = {}
-            logging.info(f"准备查询 {len(symbols_list)} 个币种的最新价格: {symbols_list}")
-
-            # OKX V5 Get Tickers (获取所有行情) 的instType参数更适合批量获取
-            # 但为了精确，我们循环获取单个币种的ticker
-            for symbol in symbols_list:
-                result = self.market_api.get_ticker(symbol)
-                if result and result.get('code') == '0' and result['data']:
-                    last_price = result['data'][0]['last']
-                    prices_dict[symbol] = float(last_price)
-                else:
-                    logging.warning(f"未能获取到 [{symbol}] 的价格。API返回: {result.get('msg', '未知错误')}")
-                
-                time.sleep(0.1) # 每次查询之间短暂休眠，防止触发限频
-            
-            logging.info(f"价格获取完成: {prices_dict}")
-            return prices_dict
-
-        except Exception as e:
-            logging.error(f"获取最新价格时发生异常: {e}")
-            return {}
-
- 
+        # logging.info(f"价格获取完成: {prices_dict}")
+        # return prices_dict
