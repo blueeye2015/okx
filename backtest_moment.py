@@ -3,6 +3,9 @@ import backtrader as bt
 import pandas as pd
 import logging
 import clickhouse_connect
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 # 导入我们的核心模块
 from momentum_scanner import scan_and_rank_momentum,_calculate_features_and_factor
@@ -31,6 +34,20 @@ class MomentumPortfolioStrategy(bt.Strategy):
         self.all_historical_data = self.p.all_historical_data
         self.all_symbols = self.p.all_symbols
 
+    # --- V V V 在这里增加下面的方法 V V V ---
+    def notify_trade(self, trade):
+        """
+        这个方法会在每次交易状态发生变化时被调用
+        我们只关心交易完成（平仓）时的状态
+        """
+        if trade.isclosed:
+            logging.info(f"--- 交易平仓 ---")
+            logging.info(f"币种: {trade.data._name}")
+            logging.info(f"毛利润: {trade.pnl:.2f}")
+            logging.info(f"净利润: {trade.pnlcomm:.2f}") # pnlcomm = pnl - commission
+            logging.info(f"-----------------")
+    # --- ^ ^ ^ 增加结束 ^ ^ ^ ---
+
     def next(self):
         self.rebalance_counter += 1
         if self.rebalance_counter % REBALANCE_DAYS != 0:
@@ -40,6 +57,7 @@ class MomentumPortfolioStrategy(bt.Strategy):
         if current_date < pd.to_datetime(BACKTEST_START_DATE).date():
             return
         logging.warning(f"\n--- 调仓日: {current_date.isoformat()} ---")
+        logging.info(f"当前总资产: {self.broker.getvalue():,.2f} | 现金: {self.broker.get_cash():,.2f}")
 
         # 1. 截取直到“今天”为止的所有历史数据
         historical_data_today = self.all_historical_data[self.all_historical_data['timestamp'] <= pd.to_datetime(current_date)]
@@ -52,17 +70,26 @@ class MomentumPortfolioStrategy(bt.Strategy):
             for symbol in list(self.getpositions().keys()): # 获取当前持仓的拷贝
                 self.close(data=self.d_names[symbol])
             return
+        
+        logging.info(f"成功生成 {len(current_ranks_df)} 个信号，排名前5如下:")
+        top_5_signals = current_ranks_df.head(5)
+        for idx, row in top_5_signals.iterrows():
+            logging.info(f"  - 排名 {idx+1}: {row['symbol']} (因子: {row['RVol']:.2f}, 价格: {row['current_price']})")
 
         current_ranks = current_ranks_df.set_index('symbol').rename(columns={'RVol': 'rank'})
         
         # --- 再平衡：卖出不符合条件的持仓 ---
         open_symbols_before_sell = [d._name for d in self.datas if self.getpositionbyname(d._name).size]
+        
         for symbol in open_symbols_before_sell:
             if symbol in current_ranks.index:
                 rank_info = current_ranks.loc[symbol]
                 if rank_info['rank'] < 0.5:
                     logging.info(f"[{symbol}] 动量衰退 (rank: {rank_info['rank']:.2f})，准备平仓。")
                     self.close(data=self.d_names[symbol])
+                else:
+                    # <--- 新增日志: 打印“决定持有”的理由 ---
+                    logging.info(f"[{symbol}] 动量维持 (rank: {rank_info['rank']:.2f} >= 0.5)，继续持有。")
             else: # 如果在新排名中找不到，说明信号已消失，也应平仓
                 logging.info(f"[{symbol}] 信号消失，准备平仓。")
                 self.close(data=self.d_names[symbol])
@@ -97,6 +124,8 @@ class MomentumPortfolioStrategy(bt.Strategy):
                     self.order_target_value(target=target_value, data=self.d_names[symbol])
                     open_counts[category] += 1
                     open_positions_symbols.add(symbol)
+        
+        logging.info(f"{'='*25} 调仓日结束 {'='*25}")
 
     # 将 momentum_scanner 的核心逻辑直接集成到策略内部，以便在回测的每一天调用
     def scan_and_rank_in_memory(self, all_data_df, symbols_list):
@@ -128,7 +157,7 @@ def run_backtrader():
     # --- 1. 数据准备 ---
     ch_client = clickhouse_connect.get_client(**CLICKHOUSE_CONFIG)
     logging.info("正在获取回测所需的全量数据...")
-    all_symbols_query = "SELECT DISTINCT symbol FROM marketdata.okx_klines_1d WHERE symbol LIKE '%-USDT'"
+    all_symbols_query = f"SELECT DISTINCT symbol FROM marketdata.okx_klines_1d WHERE symbol LIKE '%-USDT' GROUP BY symbol HAVING min(timestamp) <= toDateTime('{WARMUP_START_DATE}') order by symbol"
     symbols_list = [row[0] for row in ch_client.query(all_symbols_query).result_rows]
     
     
@@ -171,13 +200,27 @@ def run_backtrader():
         df_aligned.dropna(subset=['close'], inplace=True)
         
         if not df_aligned.empty:
+            # --- 新增的诊断代码 ---
+            first_valid_date = df_aligned.index.min().date()
+            last_valid_date = df_aligned.index.max().date()
+            
+            # 我们只打印几个关键币种的信息，避免刷屏
+            if symbol in ['BTC-USDT', 'ETH-USDT'] or first_valid_date > pd.to_datetime('2024-01-01').date():
+                 print(f"DEBUG: 为 {symbol} 添加数据 | "
+                       f"数据起始: {first_valid_date} | "
+                       f"数据结束: {last_valid_date} | "
+                       f"数据行数: {len(df_aligned)}")
+            # --- 诊断代码结束 ---
             data_feed = bt.feeds.PandasData(
                 dataname=df_aligned, # 在传入时再设置索引
                 datetime=None, open='open', high='high', low='low', close='close', volume='volume',
                 openinterest=-1
             )
             cerebro.adddata(data_feed, name=symbol)
-               
+        else:
+             # <--- 如果 df_aligned 变为空，也打印出来
+             print(f"DEBUG: 警告！{symbol} 在处理后数据为空，被跳过。")
+
     tm_for_logic = TradeManager(ch_client, trading_client=None, dry_run=True)
     tm_for_logic.open_positions = {}
     cerebro.addstrategy(MomentumPortfolioStrategy, 
@@ -236,6 +279,30 @@ def run_backtrader():
         print("交易统计: 回测期间没有已平仓的交易。")
     # #############################################################
     print("="*50)
+
+    # --- V V V 在这里增加下面的代码 V V V ---
+    # --- 增加图表绘制和最终持仓分析 ---
+    logging.info("\n--- 最终持仓分析 ---")
+    open_positions = strat.getpositions()
+    if open_positions:
+        # backtrader 的 positions 是一个字典，键是 data feed，值是 Position 对象
+        # 我们需要通过 data feed 的 _name 属性来获取币种名称
+        for data, pos in open_positions.items():
+            symbol = data._name
+            unrealized_pnl = (data.close[0] - pos.price) * pos.size
+            logging.info(f"持仓: {symbol}, "
+                         f"数量: {pos.size:.2f}, "
+                         f"开仓均价: {pos.price:.4f}, "
+                         f"当前价: {data.close[0]:.4f}, "
+                         f"未实现盈亏: {unrealized_pnl:.2f}")
+    else:
+        logging.info("回测结束时无持仓。")
+
+    logging.warning("正在生成回测图表, 请在运行目录下查找 backtest_plot.html 文件...")
+    # 使用 iplot=False 和 savefig=True 来确保在任何环境下都能生成文件
+    cerebro.plot(style='candlestick', iplot=False, savefig=True, figfilename='backtest_plot.html')
+    # --- ^ ^ ^ 增加结束 ^ ^ ^ ---
+
 
 if __name__ == '__main__':
     run_backtrader()

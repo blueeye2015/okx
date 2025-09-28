@@ -68,7 +68,7 @@ def _calculate_features_and_factor(group_df, window_size=120):
         lgb_params = {
             'objective': 'binary', 'metric': 'binary_logloss', 'n_estimators': 100,
             'learning_rate': 0.05, 'num_leaves': 10, 'max_depth': 3,
-            'seed': 42, 'n_jobs': -1, 'verbose': -1
+            'random_state': 42, 'n_jobs': -1, 'verbose': -1, 'deterministic': True 
         }
         model = lgb.LGBMClassifier(**lgb_params)
         model.fit(X_train_scaled, y_train)
