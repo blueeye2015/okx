@@ -14,3 +14,4 @@ watchlist_update.log
 1d_klines.log
 backtest_moment.log
 spike_trader.log
+backtest.log

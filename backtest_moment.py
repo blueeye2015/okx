@@ -30,7 +30,8 @@ class MomentumPortfolioStrategy(bt.Strategy):
         ('all_historical_data', None),
         ('all_symbols', None), # <-- 补上缺失的声明
         ('trade_manager', None),
-        ('trail_percent', 0.08),  # <--- 新增：移动止损的回撤比例 (8%)
+        ('stop_loss', 0.08),  # <--- 新增：移动止损的回撤比例 (8%)
+        ('take_profit', 0.25),  # 止盈 25%
     )
 
     def __init__(self):
@@ -39,10 +40,11 @@ class MomentumPortfolioStrategy(bt.Strategy):
         self.d_names = {d._name: d for d in self.datas}
         self.all_historical_data = self.p.all_historical_data
         self.all_symbols = self.p.all_symbols
-        self.position_peaks = {}  # <--- 新增：用于跟踪每个持仓达到的最高价
+        #self.position_peaks = {}  # <--- 新增：用于跟踪每个持仓达到的最高价
         self.sold_in_this_rebalance = set() # 用于记录在当前调仓日已卖出的币种，防止立即再买入
         self.trade_info = {} # <--- 用一个字典来跟踪每笔交易的开仓方向
-
+        self.trades = []
+        
     # --- V V V 在这里增加下面的方法 V V V ---
     # def notify_trade(self, trade):
     #     """
@@ -63,62 +65,90 @@ class MomentumPortfolioStrategy(bt.Strategy):
     #             self.position_peaks.pop(trade.data._name)
     # --- ^ ^ ^ 增加结束 ^ ^ ^ ---
     # backtest_with_backtrader.py
-
     def notify_trade(self, trade):
-        # 当一笔交易刚刚开仓时
-        if trade.justopened:
-            # 使用 trade.ref 这个唯一ID来作为键
-            # 记录下这笔交易的开仓方向
-            direction = 'long' if trade.size > 0 else 'short'
-            self.trade_info[trade.ref] = {
-                'symbol': trade.data._name,
-                'direction': direction,
-                'open_datetime': self.datetime.datetime(0)
-            }
-            return # 刚开仓，直接返回，不做后续处理
+            # (此方法保持您上一版的逻辑不变，用于收集交易信息)
+            if trade.justopened:
+                direction = 'long' if trade.size > 0 else 'short'
+                self.trade_info[trade.ref] = {
+                    'symbol': trade.data._name,
+                    'direction': direction,
+                    'open_datetime': self.datetime.datetime(0)
+                }
+                return
 
-        # 当一笔交易关闭时
-        if trade.isclosed:
-            # 从我们的字典中获取这笔交易的开仓信息
-            info = self.trade_info.pop(trade.ref, None)
-            if not info:
-                return # 如果找不到信息，说明有问题，跳过
+            if trade.isclosed:
+                info = self.trade_info.pop(trade.ref, None)
+                if not info: return
 
-            # 将我们自己记录的信息 和 trade 对象关闭时的信息 结合起来
-            trade_record = {
-                'symbol': info['symbol'],
-                'direction': info['direction'],
-                'pnl_net': trade.pnlcomm,
-                'open_datetime': info['open_datetime'],
-                'close_datetime': self.datetime.datetime(0),
-            }
-            # 这里您可以决定如何处理这个完整的记录，例如存入一个列表供最后分析
-            # 为了能复用您后面的分析函数，我们创建一个简单的对象
-            class FinalTrade:
-                pass
+                class FinalTrade: pass
+                final_trade = FinalTrade()
+                final_trade.data = trade.data
+                final_trade.direction = info['direction']
+                final_trade.pnlcomm = trade.pnlcomm
+                final_trade.open_datetime = lambda: info['open_datetime']
+                final_trade.close_datetime = lambda: self.datetime.datetime(0)
+                
+                self.trades.append(final_trade)
+
+                logging.info(f"--- 交易平仓 ---\n"
+                            f"币种: {trade.data._name}\n"
+                            f"净利润: {trade.pnlcomm:.2f}\n"
+                            f"-----------------")
+    # def notify_trade(self, trade):
+    #     # 当一笔交易刚刚开仓时
+    #     if trade.justopened:
+    #         # 使用 trade.ref 这个唯一ID来作为键
+    #         # 记录下这笔交易的开仓方向
+    #         direction = 'long' if trade.size > 0 else 'short'
+    #         self.trade_info[trade.ref] = {
+    #             'symbol': trade.data._name,
+    #             'direction': direction,
+    #             'open_datetime': self.datetime.datetime(0)
+    #         }
+    #         return # 刚开仓，直接返回，不做后续处理
+
+    #     # 当一笔交易关闭时
+    #     if trade.isclosed:
+    #         # 从我们的字典中获取这笔交易的开仓信息
+    #         info = self.trade_info.pop(trade.ref, None)
+    #         if not info:
+    #             return # 如果找不到信息，说明有问题，跳过
+
+    #         # 将我们自己记录的信息 和 trade 对象关闭时的信息 结合起来
+    #         trade_record = {
+    #             'symbol': info['symbol'],
+    #             'direction': info['direction'],
+    #             'pnl_net': trade.pnlcomm,
+    #             'open_datetime': info['open_datetime'],
+    #             'close_datetime': self.datetime.datetime(0),
+    #         }
+    #         # 这里您可以决定如何处理这个完整的记录，例如存入一个列表供最后分析
+    #         # 为了能复用您后面的分析函数，我们创建一个简单的对象
+    #         class FinalTrade:
+    #             pass
             
-            final_trade = FinalTrade()
-            final_trade.data = trade.data # 保持.data._name可用
-            final_trade.direction = trade_record['direction']
-            final_trade.pnlcomm = trade_record['pnl_net']
-            final_trade.open_datetime = lambda: trade_record['open_datetime']
-            final_trade.close_datetime = lambda: trade_record['close_datetime']
+    #         final_trade = FinalTrade()
+    #         final_trade.data = trade.data # 保持.data._name可用
+    #         final_trade.direction = trade_record['direction']
+    #         final_trade.pnlcomm = trade_record['pnl_net']
+    #         final_trade.open_datetime = lambda: trade_record['open_datetime']
+    #         final_trade.close_datetime = lambda: trade_record['close_datetime']
             
-            # 使用 self.trades 收集处理过的 final_trade 对象
-            if not hasattr(self, 'trades'):
-                self.trades = []
-            self.trades.append(final_trade)
+    #         # 使用 self.trades 收集处理过的 final_trade 对象
+    #         if not hasattr(self, 'trades'):
+    #             self.trades = []
+    #         self.trades.append(final_trade)
 
-            # --- 以下是您原有的日志记录，可以保留 ---
-            pos = self.getposition(trade.data)
-            print(f"[DEBUG] {self.datetime.date(0)} - {trade.data._name} trade.isclosed=True, 但getposition().size={pos.size}")
-            logging.info(f"--- 交易平仓 ---")
-            logging.info(f"币种: {trade.data._name}")
-            logging.info(f"毛利润: {trade.pnl:.2f}")
-            logging.info(f"净利润: {trade.pnlcomm:.2f}")
-            logging.info(f"-----------------")
-            if trade.data._name in self.position_peaks:
-                self.position_peaks.pop(trade.data._name)
+    #         # --- 以下是您原有的日志记录，可以保留 ---
+    #         pos = self.getposition(trade.data)
+    #         print(f"[DEBUG] {self.datetime.date(0)} - {trade.data._name} trade.isclosed=True, 但getposition().size={pos.size}")
+    #         logging.info(f"--- 交易平仓 ---")
+    #         logging.info(f"币种: {trade.data._name}")
+    #         logging.info(f"毛利润: {trade.pnl:.2f}")
+    #         logging.info(f"净利润: {trade.pnlcomm:.2f}")
+    #         logging.info(f"-----------------")
+    #         if trade.data._name in self.position_peaks:
+    #             self.position_peaks.pop(trade.data._name)
 
      # --- 【新增】订单通知日志 ---
     def notify_order(self, order):
@@ -146,152 +176,243 @@ class MomentumPortfolioStrategy(bt.Strategy):
             logging.warning(f"--- 订单问题 ---\n"
                             f"  币种: {order.data._name}, 状态: {order.getstatusname()}")
             
-    def _check_daily_stops(self):
-        """
-        【新增】每日执行的检查逻辑，用于处理移动止损。
-        """
-        logging.info(f"--- {self.datetime.date(0)}止损检查 ---")
-        open_positions = self.getpositions()
+    # def _check_daily_stops(self):
+    #     """
+    #     【新增】每日执行的检查逻辑，用于处理移动止损。
+    #     """
+    #     logging.info(f"--- {self.datetime.date(0)}止损检查 ---")
+    #     open_positions = self.getpositions()
         
-        # 拷贝一份进行遍历，因为可能会在循环中修改持仓
-        for data, pos in list(open_positions.items()):
-            symbol = data._name
-            if pos.size == 0: continue
-            print(f"[DEBUG] {self.datetime.date(0)} - {symbol} 持仓 size={pos.size}, price={pos.price}")
+    #     # 拷贝一份进行遍历，因为可能会在循环中修改持仓
+    #     for data, pos in list(open_positions.items()):
+    #         symbol = data._name
+    #         if pos.size == 0: continue
+    #         print(f"[DEBUG] {self.datetime.date(0)} - {symbol} 持仓 size={pos.size}, price={pos.price}")
 
-            current_price = data.close[0]
+    #         current_price = data.close[0]
             
-            # 更新或初始化该持仓的历史最高价
-            if symbol not in self.position_peaks:
-                self.position_peaks[symbol] = current_price
-            else:
-                self.position_peaks[symbol] = max(self.position_peaks[symbol], current_price)
+    #         # 更新或初始化该持仓的历史最高价
+    #         if symbol not in self.position_peaks:
+    #             self.position_peaks[symbol] = current_price
+    #         else:
+    #             self.position_peaks[symbol] = max(self.position_peaks[symbol], current_price)
             
-            peak_price = self.position_peaks[symbol]
-            stop_price = peak_price * (1.0 - self.p.trail_percent)
+    #         peak_price = self.position_peaks[symbol]
+    #         stop_price = peak_price * (1.0 - self.p.trail_percent)
 
-            # 检查当前价格是否已跌破移动止损位
-            if current_price < stop_price:
-                logging.warning(f"[{symbol}] 触发移动止损！最高价: {peak_price:.4f}, "
-                              f"止损价: {stop_price:.4f}, 当前价: {current_price:.4f}。准备平仓。")
-                self.close(data=data)
-                self.sold_in_this_rebalance.add(symbol)
-            else:
-                logging.info(f"[{symbol}] 持仓正常。最高价: {peak_price:.4f}, 止损价: {stop_price:.4f}, 当前价: {current_price:.4f}")
+    #         # 检查当前价格是否已跌破移动止损位
+    #         if current_price < stop_price:
+    #             logging.warning(f"[{symbol}] 触发移动止损！最高价: {peak_price:.4f}, "
+    #                           f"止损价: {stop_price:.4f}, 当前价: {current_price:.4f}。准备平仓。")
+    #             self.close(data=data)
+    #             self.sold_in_this_rebalance.add(symbol)
+    #         else:
+    #             logging.info(f"[{symbol}] 持仓正常。最高价: {peak_price:.4f}, 止损价: {stop_price:.4f}, 当前价: {current_price:.4f}")
 
 
+    # def next(self):
+    #     print(f"[DEBUG] {self.datetime.date(0)} 当前持仓:", [
+    #     d._name for d in self.datas if self.getposition(d).size > 0
+    #     ])
+        
+    #     # --- 【增加日志】 ---
+    #     logging.info(f"--- 清空当日卖出列表 (sold_in_this_rebalance) ---")
+    #     self.sold_in_this_rebalance.clear()
+        
+    #     # 确保只在回测期内运行
+    #     current_date = self.datetime.date(0)
+    #     if current_date < pd.to_datetime(BACKTEST_START_DATE).date():
+    #         return
+        
+    #     # --- 逻辑分离 ---
+    #     # 1. 每日执行移动止损检查
+    #     #self._check_daily_stops()
+
+    #     # 2. 只在调仓日执行再平衡逻辑
+    #     self.rebalance_counter += 1
+    #     if self.rebalance_counter % REBALANCE_DAYS != 0:
+    #         return
+        
+    #     current_date = self.datetime.date(0)
+    #     if current_date < pd.to_datetime(BACKTEST_START_DATE).date():
+    #         return
+    #     logging.warning(f"\n--- 调仓日: {current_date.isoformat()} ---")
+    #     logging.info(f"当前总资产: {self.broker.getvalue():,.2f} | 现金: {self.broker.get_cash():,.2f}")
+
+    #     # 1. 截取直到“今天”为止的所有历史数据
+    #     historical_data_today = self.all_historical_data[self.all_historical_data['timestamp'] <= pd.to_datetime(current_date)]
+        
+    #    # 2. 在“今天”这个时间点上，重新运行因子扫描
+    #     logging.info("正在为当前调仓日动态计算因子排名...")
+    #     current_ranks_df = self.scan_and_rank_in_memory(historical_data_today, self.all_symbols)
+    #     if current_ranks_df.empty:
+    #         logging.warning("当前日期无法生成有效信号，清空所有持仓。")
+    #         for symbol in list(self.getpositions().keys()): # 获取当前持仓的拷贝
+    #             self.close(data=self.d_names[symbol])
+    #         return
+        
+    #     logging.info(f"成功生成 {len(current_ranks_df)} 个信号，排名前5如下:")
+    #     top_5_signals = current_ranks_df.head(5)
+    #     for idx, row in top_5_signals.iterrows():
+    #         logging.info(f"  - 排名 {idx+1}: {row['symbol']} (因子: {row['RVol']:.2f}, 价格: {row['current_price']})")
+
+    #     current_ranks = current_ranks_df.set_index('symbol').rename(columns={'RVol': 'rank'})
+        
+    #     # --- 再平衡：卖出不符合条件的持仓 ---
+    #     open_symbols_before_sell = [d._name for d in self.datas if self.getpositionbyname(d._name).size]
+        
+    #     for symbol in open_symbols_before_sell:
+    #         if symbol in self.sold_in_this_rebalance:
+    #             logging.info(f"[{symbol}] 当日已触发止损卖出，跳过调仓逻辑的卖出检查。")
+    #             continue
+    #         should_sell = False
+    #         if symbol in current_ranks.index:
+    #             rank_info = current_ranks.loc[symbol]
+    #             if rank_info['rank'] < 0.5:
+    #                 logging.info(f"[{symbol}] 动量衰退 (rank: {rank_info['rank']:.2f})，准备平仓。")
+    #                 self.close(data=self.d_names[symbol])
+    #                 should_sell = True
+    #             else:
+    #                 # <--- 新增日志: 打印“决定持有”的理由 ---
+    #                 logging.info(f"[{symbol}] 动量维持 (rank: {rank_info['rank']:.2f} >= 0.5)，继续持有。")
+    #         else: # 如果在新排名中找不到，说明信号已消失，也应平仓
+    #             logging.info(f"[{symbol}] 信号消失，准备平仓。")
+    #             self.close(data=self.d_names[symbol])
+    #             should_sell = True
+            
+    #         if should_sell:
+    #             # --- 【增加日志】 ---
+    #             logging.info(f"  -> DEBUG: 将 {symbol} 添加到 sold_in_this_rebalance 集合。")
+    #             self.sold_in_this_rebalance.add(symbol)
+        
+    #     # --- 择优建仓：买入排名最高的币种 ---
+    #     num_open_positions = sum(1 for pos in self.broker.positions if self.broker.getposition(pos).size)
+    #     open_positions_symbols = {d._name for d in self.datas if self.getposition(d).size > 0}
+        
+    #     open_counts = {cat: 0 for cat in self.tm.max_positions_config}
+    #     for pos_symbol in open_positions_symbols:
+    #         cat = self.tm.get_market_cap_category(pos_symbol)
+    #         if cat in open_counts: open_counts[cat] += 1
+            
+    #     if num_open_positions < self.tm.total_max_positions:
+    #         # 按排名从高到低遍历
+    #         for symbol, signal_info in current_ranks.sort_values('rank', ascending=False).iterrows():
+    #             # 【关键安全检查】确保这个币种的数据真实存在于回测引擎中
+    #             if symbol not in self.d_names:
+    #                 continue
+
+    #             current_pos_count = sum(1 for pos in self.broker.positions if self.broker.getposition(pos).size)
+    #             if current_pos_count >= self.tm.total_max_positions:
+    #                 break
+    #             if symbol in open_positions_symbols: continue
+
+    #             # 【核心修复】如果这个币刚被卖掉，就不要再买回来
+    #             if symbol in self.sold_in_this_rebalance:
+    #                 continue
+                
+    #             category = self.tm.get_market_cap_category(symbol)
+    #             if category == 'unknown': continue
+
+    #             if open_counts.get(category, 0) < self.tm.max_positions_config.get(category, 0):
+    #                 logging.warning(f"[{symbol}] 符合建仓条件 (rank: {signal_info['rank']:.2f}, category: {category})，准备开仓。")
+    #                 target_value = self.broker.get_value() * (1 / self.tm.total_max_positions) * 0.95
+    #                 self.order_target_value(target=target_value, data=self.d_names[symbol])
+    #                 open_counts[category] += 1
+    #                 open_positions_symbols.add(symbol)
+        
+    #     logging.info(f"{'='*25} 调仓日结束 {'='*25}")
     def next(self):
-        print(f"[DEBUG] {self.datetime.date(0)} 当前持仓:", [
-        d._name for d in self.datas if self.getposition(d).size > 0
-        ])
-        
-        # --- 【增加日志】 ---
-        logging.info(f"--- 清空当日卖出列表 (sold_in_this_rebalance) ---")
-        self.sold_in_this_rebalance.clear()
-        
-        # 确保只在回测期内运行
-        current_date = self.datetime.date(0)
-        if current_date < pd.to_datetime(BACKTEST_START_DATE).date():
-            return
-        
-        # --- 逻辑分离 ---
-        # 1. 每日执行移动止损检查
-        self._check_daily_stops()
+            self.sold_in_this_rebalance.clear()
+            
+            current_date = self.datetime.date(0)
+            if current_date < pd.to_datetime(BACKTEST_START_DATE).date():
+                return
+            
+            # V V V 【删除】不再需要调用每日止损检查 V V V
+            # self._check_daily_stops()
+            # ^ ^ ^ 删除结束 ^ ^ ^
 
-        # 2. 只在调仓日执行再平衡逻辑
-        self.rebalance_counter += 1
-        if self.rebalance_counter % REBALANCE_DAYS != 0:
-            return
-        
-        current_date = self.datetime.date(0)
-        if current_date < pd.to_datetime(BACKTEST_START_DATE).date():
-            return
-        logging.warning(f"\n--- 调仓日: {current_date.isoformat()} ---")
-        logging.info(f"当前总资产: {self.broker.getvalue():,.2f} | 现金: {self.broker.get_cash():,.2f}")
+            self.rebalance_counter += 1
+            if self.rebalance_counter % REBALANCE_DAYS != 0:
+                return
 
-        # 1. 截取直到“今天”为止的所有历史数据
-        historical_data_today = self.all_historical_data[self.all_historical_data['timestamp'] <= pd.to_datetime(current_date)]
-        
-       # 2. 在“今天”这个时间点上，重新运行因子扫描
-        logging.info("正在为当前调仓日动态计算因子排名...")
-        current_ranks_df = self.scan_and_rank_in_memory(historical_data_today, self.all_symbols)
-        if current_ranks_df.empty:
-            logging.warning("当前日期无法生成有效信号，清空所有持仓。")
-            for symbol in list(self.getpositions().keys()): # 获取当前持仓的拷贝
-                self.close(data=self.d_names[symbol])
-            return
-        
-        logging.info(f"成功生成 {len(current_ranks_df)} 个信号，排名前5如下:")
-        top_5_signals = current_ranks_df.head(5)
-        for idx, row in top_5_signals.iterrows():
-            logging.info(f"  - 排名 {idx+1}: {row['symbol']} (因子: {row['RVol']:.2f}, 价格: {row['current_price']})")
-
-        current_ranks = current_ranks_df.set_index('symbol').rename(columns={'RVol': 'rank'})
-        
-        # --- 再平衡：卖出不符合条件的持仓 ---
-        open_symbols_before_sell = [d._name for d in self.datas if self.getpositionbyname(d._name).size]
-        
-        for symbol in open_symbols_before_sell:
-            if symbol in self.sold_in_this_rebalance:
-                logging.info(f"[{symbol}] 当日已触发止损卖出，跳过调仓逻辑的卖出检查。")
-                continue
-            should_sell = False
-            if symbol in current_ranks.index:
-                rank_info = current_ranks.loc[symbol]
-                if rank_info['rank'] < 0.5:
-                    logging.info(f"[{symbol}] 动量衰退 (rank: {rank_info['rank']:.2f})，准备平仓。")
-                    self.close(data=self.d_names[symbol])
+            # --- 调仓日逻辑 ---
+            logging.warning(f"\n--- 调仓日: {current_date.isoformat()} ---")
+            # ... (数据准备和因子计算部分保持不变) ...
+            historical_data_today = self.all_historical_data[self.all_historical_data['timestamp'] <= pd.to_datetime(current_date)]
+            current_ranks_df = self.scan_and_rank_in_memory(historical_data_today, self.all_symbols)
+            # ... (处理空信号和日志部分保持不变) ...
+            current_ranks = current_ranks_df.set_index('symbol').rename(columns={'RVol': 'rank'})
+            
+            # --- 再平衡：卖出不符合条件的持仓 (逻辑不变) ---
+            # (当您因为动量衰退而调用 self.close() 时，Backtrader会自动取消关联的止盈止损单)
+            open_positions = self.getpositions()
+            for data, pos in list(open_positions.items()):
+                symbol = data._name
+                if pos.size == 0: continue
+                if symbol in self.sold_in_this_rebalance: continue
+                
+                should_sell = False
+                if symbol not in current_ranks.index or current_ranks.loc[symbol, 'rank'] < 0.5:
                     should_sell = True
+
+                if should_sell:
+                    logging.info(f"[{symbol}] 动量/信号不符，准备平仓。")
+                    self.close(data=data)
+                    self.sold_in_this_rebalance.add(symbol)
                 else:
-                    # <--- 新增日志: 打印“决定持有”的理由 ---
-                    logging.info(f"[{symbol}] 动量维持 (rank: {rank_info['rank']:.2f} >= 0.5)，继续持有。")
-            else: # 如果在新排名中找不到，说明信号已消失，也应平仓
-                logging.info(f"[{symbol}] 信号消失，准备平仓。")
-                self.close(data=self.d_names[symbol])
-                should_sell = True
+                    logging.info(f"[{symbol}] 动量维持，继续持有。")
             
-            if should_sell:
-                # --- 【增加日志】 ---
-                logging.info(f"  -> DEBUG: 将 {symbol} 添加到 sold_in_this_rebalance 集合。")
-                self.sold_in_this_rebalance.add(symbol)
-        
-        # --- 择优建仓：买入排名最高的币种 ---
-        num_open_positions = sum(1 for pos in self.broker.positions if self.broker.getposition(pos).size)
-        open_positions_symbols = {d._name for d in self.datas if self.getposition(d).size > 0}
-        
-        open_counts = {cat: 0 for cat in self.tm.max_positions_config}
-        for pos_symbol in open_positions_symbols:
-            cat = self.tm.get_market_cap_category(pos_symbol)
-            if cat in open_counts: open_counts[cat] += 1
+            # --- 择优建仓：买入排名最高的币种 ---
+            open_positions_symbols = {d._name for d in self.datas if self.getposition(d).size > 0}
+            open_counts = {cat: 0 for cat in self.tm.max_positions_config}
+            for pos_symbol in open_positions_symbols:
+                cat = self.tm.get_market_cap_category(pos_symbol)
+                if cat in open_counts: open_counts[cat] += 1
             
-        if num_open_positions < self.tm.total_max_positions:
-            # 按排名从高到低遍历
             for symbol, signal_info in current_ranks.sort_values('rank', ascending=False).iterrows():
-                # 【关键安全检查】确保这个币种的数据真实存在于回测引擎中
-                if symbol not in self.d_names:
-                    continue
-
-                current_pos_count = sum(1 for pos in self.broker.positions if self.broker.getposition(pos).size)
-                if current_pos_count >= self.tm.total_max_positions:
-                    break
+                current_pos_count = len([p for p in self.getpositions() if self.getposition(p).size > 0])
+                if current_pos_count >= self.tm.total_max_positions: break
+                if symbol not in self.d_names: continue
                 if symbol in open_positions_symbols: continue
-
-                # 【核心修复】如果这个币刚被卖掉，就不要再买回来
-                if symbol in self.sold_in_this_rebalance:
-                    continue
+                if symbol in self.sold_in_this_rebalance: continue
                 
                 category = self.tm.get_market_cap_category(symbol)
                 if category == 'unknown': continue
-
+                
                 if open_counts.get(category, 0) < self.tm.max_positions_config.get(category, 0):
                     logging.warning(f"[{symbol}] 符合建仓条件 (rank: {signal_info['rank']:.2f}, category: {category})，准备开仓。")
+                    
+                    # V V V 【核心修改】使用 buy_bracket 替换 order_target_value V V V
+                    data = self.d_names[symbol]
+                    current_price = data.close[0]
+                    if current_price == 0: continue # 避免价格为0导致无法计算
+
+                    # 1. 计算下单数量
                     target_value = self.broker.get_value() * (1 / self.tm.total_max_positions) * 0.95
-                    self.order_target_value(target=target_value, data=self.d_names[symbol])
+                    size = target_value / current_price
+
+                    # 2. 计算止盈和止损价格
+                    stop_price = current_price * (1.0 - self.p.stop_loss)
+                    limit_price = current_price * (1.0 + self.p.take_profit)
+                    
+                    # 3. 执行括号订单
+                    # Backtrader 会自动处理：下一个 bar 开盘/收盘时买入，
+                    # 同时创建对应的止盈(limit)和止损(stop)卖单。
+                    # 其中一个卖单成交后，另一个会自动取消。
+                    self.buy_bracket(
+                        data=data,
+                        size=size,
+                        exectype=bt.Order.Close, # 根据您的 set_coc(True) 设置，使用收盘价成交
+                        stopprice=stop_price,
+                        limitprice=limit_price
+                    )
+                    # ^ ^ ^ 修改结束 ^ ^ ^
+                    
                     open_counts[category] += 1
                     open_positions_symbols.add(symbol)
-        
-        logging.info(f"{'='*25} 调仓日结束 {'='*25}")
-
+            
+            logging.info(f"{'='*25} 调仓日结束 {'='*25}")
     # 将 momentum_scanner 的核心逻辑直接集成到策略内部，以便在回测的每一天调用
     def scan_and_rank_in_memory(self, all_data_df, symbols_list):
         results = []
