@@ -5,7 +5,7 @@ import logging
 import clickhouse_connect
 
 # --- 配置区 ---
-START_DATE = "2022-09-14" # 开始日期 (获取大约一年的数据)
+START_DATE = "2025-01-01" # 开始日期 (获取大约一年的数据)
 SYMBOL_FILE = "/data/okx/symbol.txt" # 存放币种列表的文件名
 
 # ClickHouse数据库配置
@@ -131,3 +131,9 @@ if __name__ == "__main__":
             
             ch_client.close()
             logging.info("所有币种处理完毕，数据库连接已关闭。")
+            ch_client = get_clickhouse_client()      # 重新拿一个连接
+            ch_client.command(
+                "OPTIMIZE TABLE marketdata.okx_klines_1d FINAL"
+            )
+            ch_client.close()
+            logging.info("已强制触发 FINAL 合并，重复数据清理完成。")
