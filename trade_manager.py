@@ -7,16 +7,17 @@ import time
 import uuid
 
 class TradeManager:
-    def __init__(self, ch_client, trading_client, dry_run=True):
+    def __init__(self, ch_client, trading_client, dry_run=True, backtest_mode=False):
         # ... (初始化部分与之前完全相同)
         logging.info("初始化交易管理器...")
         self.trading_client = trading_client  ##不再自己创建，而是使用传入的实例
         self.ch_client = ch_client
         self.dry_run = dry_run
+        self.backtest_mode = backtest_mode
         self.position_size_usdt = 100.0
         self.stop_loss_pct = 0.08
         self.take_profit_pct = 0.25
-        self.max_positions_config = {'small': 3, 'mid': 1, 'large': 1}
+        self.max_positions_config = {'small': 4, 'mid': 4, 'large': 2}
         self.total_max_positions = sum(self.max_positions_config.values())
         self.market_cap_tiers = {
             'small': (0, 500_000_000),
@@ -35,8 +36,12 @@ class TradeManager:
         # self.cooldown_list 不再是字典，而是一个set，用于快速内存查找
         self.cooldown_list = set()
 
-        self.load_open_positions_from_db() ##获取仓位
-        self.load_active_cooldowns_from_db() # 【新!】启动时加载冷却列表
+        if not self.backtest_mode:
+            self.load_open_positions_from_db() ##获取仓位
+            self.load_active_cooldowns_from_db() # 【新!】启动时加载冷却列表
+        else:
+            self.open_positions = {}
+            self.cooldown_list = {}
 
 
     def load_active_cooldowns_from_db(self):

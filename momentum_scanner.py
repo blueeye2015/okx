@@ -78,7 +78,42 @@ def _calculate_features_and_factor(group_df, window_size=120):
         return pd.Series({'factor': pred_proba, 'latest_price': df_clean['close'].iloc[-1]})
     except Exception:
         return None
+# def _calculate_features_and_factor(group_df):
+#     """
+#     【终极诊断版】一个100%确定性的简单动量因子，用于隔离问题。
+#     这个版本完全移除了 LightGBM 模型和所有特征工程。
+#     """
+#     # 确保有足够的数据来计算90天的滚动值
+#     if len(group_df) < 92: # (90天窗口 + 2天shift)
+#         return None
 
+#     try:
+#         # 创建一个简单的、完全确定性的动量因子
+#         df = group_df.copy()
+        
+#         # 1. 计算日收益率
+#         df['return'] = df['close'].pct_change()
+        
+#         # 2. 将过去90天的收益率累加作为因子值
+#         #    使用 .shift(2) 是为了和你之前的模型逻辑保持一致
+#         df['factor'] = df['return'].rolling(90, min_periods=60).sum().shift(2)
+
+#         # 3. 删除因子为空的行
+#         df.dropna(subset=['factor'], inplace=True)
+
+#         if df.empty:
+#             return None
+
+#         # 4. 返回最后一天的因子值和价格
+#         last_row = df.iloc[-1]
+        
+#         # 我们只返回一个包含两个键的简单Series对象
+#         return pd.Series({'factor': last_row['factor'], 'latest_price': last_row['close']})
+
+#     except Exception as e:
+#         # 如果有任何计算错误，返回None
+#         # print(f"Error calculating simple factor for {group_df['symbol'].iloc[0]}: {e}")
+#         return None
 
 def scan_and_rank_momentum(ch_client, symbols_list):
     """【最终生产版】扫描所有币种，计算因子并返回一个完整的排名列表。"""
