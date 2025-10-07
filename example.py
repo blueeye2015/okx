@@ -23,6 +23,11 @@ if __name__ == '__main__':
     # flag = '1'  # 模拟盘
     flag = '0'  # 实盘
 
+    if not all([api_key, secret_key, passphrase]):
+        raise RuntimeError('读取 .env 失败，请检查路径与内容')
+
+    print("API_SECRET_KEY type:", type(api_key))
+    print("API_SECRET_KEY value:", repr(api_key))
     # account api
     #accountAPI = Account.AccountAPI(api_key, secret_key, passphrase, False, flag, proxies)
     # 查看账户余额  Get Balance
@@ -84,7 +89,7 @@ if __name__ == '__main__':
     # 获取所有产品行情信息  Get Tickers
     #result = marketAPI.get_tickers('SPOT')
     # 获取单个产品行情信息  Get Ticker
-    result = marketAPI.get_ticker('ALPHA-USDT')
+    #result = marketAPI.get_ticker('ALPHA-USDT')
     # 获取指数行情  Get Index Tickers
     # result = marketAPI.get_index_ticker('BTC', 'BTC-USD')
     # 获取产品深度  Get Order Book
@@ -92,7 +97,7 @@ if __name__ == '__main__':
     # 获取所有交易产品K线数据  Get Candlesticks
     #result = marketAPI.get_candlesticks('ACT-USDT', bar='1m')
     # 获取交易产品历史K线数据（仅主流币实盘数据）  Get Candlesticks History（top currencies in real-trading only）
-    # result = marketAPI.get_history_candlesticks('BTC-USDT')
+    result = marketAPI.get_history_candlesticks('OAS-USDT','1670774400000','','1D')
     # 获取指数K线数据  Get Index Candlesticks
     # result = marketAPI.get_index_candlesticks('BTC-USDT')
     # 获取标记价格K线数据  Get Mark Price Candlesticks
@@ -207,8 +212,8 @@ if __name__ == '__main__':
     #api= json.dumps(result)
     #api['data']
     # 提取并打印所有 instId
-    with open('symbol.txt', 'w', encoding='utf-8') as f:
-        for item in result['data']:
-            inst_id = item['instId']
-            if inst_id.lower().endswith('-usdt'):   # 排除以-usd结尾的
-                f.write(inst_id + '\n')
+    # with open('symbol.txt', 'w', encoding='utf-8') as f:
+    #     for item in result['data']:
+    #         inst_id = item['instId']
+    #         if inst_id.lower().endswith('-usdt'):   # 排除以-usd结尾的
+    #             f.write(inst_id + '\n')
