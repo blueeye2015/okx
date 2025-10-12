@@ -68,7 +68,7 @@ def init_worker(price_data, mkt_ret_data):
     worker_mkt_ret_series = mkt_ret_data
 
 def calculate_factors_for_single_symbol(symbol, price_df, mkt_ret_series):
-    g = price_df[price_df['symbol'] == symbol][['trade_date', 'close']]
+    g = price_df[price_df['symbol'] == symbol][['trade_date', 'close', 'total_mv']]
     if len(g) < MIN_TRAIN_DAYS:
         return None
     
@@ -83,6 +83,12 @@ def calc_daily_factor_monthly_train(df_sym: pd.DataFrame, mkt_ret_series: pd.Ser
     df = df_sym.copy().set_index('trade_date')
     df['return'] = df['close'].pct_change()
     df = df.merge(mkt_ret_series.rename('mkt_ret'), left_index=True, right_index=True, how='left')
+     # <<<--- 新增：计算市值因子特征 ---<<<
+    # 对市值取对数，处理极端值，使其更稳定
+    # .clip(lower=1) 防止市值为0或负数时取对数出错
+    df['log_mv'] = np.log(df['total_mv'].clip(lower=1))
+    # 滞后一期以防未来函数
+    df['log_mv_t1'] = df['log_mv'].shift(1)
     max_dur = 12
     df['sign'] = np.where(df['return'] > 0, 1, -1)
     df['streak_start'] = (df['sign'] != df['sign'].shift(1)).cumsum()
@@ -96,7 +102,8 @@ def calc_daily_factor_monthly_train(df_sym: pd.DataFrame, mkt_ret_series: pd.Ser
     df['IV'] = df['return'].expanding(MIN_TRAIN_DAYS).apply(
         lambda r: calc_iv(r, df.loc[r.index, 'mkt_ret']), raw=False)
     df['IV_t1'] = df['IV'].shift(1)
-    features = ['IV_t1', 'rm_t1', 'P_d_t1', 'N_d_t1']
+    # <<<--- 修改：将新的市值因子加入特征列表 ---<<<
+    features = ['IV_t1', 'rm_t1', 'P_d_t1', 'N_d_t1', 'log_mv_t1']
     df_clean = df.dropna(subset=features).copy()
     df_clean['target'] = (df_clean['return'].rolling(21).sum().shift(-21) > 0).astype(int)
     if len(df_clean) < MIN_TRAIN_DAYS + 21: return pd.DataFrame()

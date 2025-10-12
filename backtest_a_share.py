@@ -48,7 +48,27 @@ df_index = pd.read_sql_query(index_price_query, conn)
 df_index.rename(columns={'ts_code': 'symbol'}, inplace=True)
 logging.info(f"已从 index_daily 表获取 {len(df_index)} 行指数数据。")
 
-df = pd.concat([df_stocks, df_index], ignore_index=True)
+df_prices = pd.concat([df_stocks, df_index], ignore_index=True)
+
+# <<<--- 新增：步骤 2.2: 查询市值数据 ---<<<
+mv_query = f"""
+SELECT trade_date, security_code AS symbol, total_mv
+FROM public.daily_basic
+WHERE security_code IN {tuple(stock_symbols_list)}
+    AND trade_date BETWEEN '{START_DATE}'::date AND '{END_DATE}'::date
+"""
+df_mv = pd.read_sql_query(mv_query, conn)
+logging.info(f"已从 daily_basic 表获取 {len(df_mv)} 行市值数据。")
+conn.close()
+logging.info("数据库连接已关闭。")
+
+# <<<--- 修改：步骤 2.3: 合并价格与市值数据 ---<<<
+df_prices['trade_date'] = pd.to_datetime(df_prices['trade_date'])
+df_mv['trade_date'] = pd.to_datetime(df_mv['trade_date'])
+# 使用左连接，以价格数据为准，合并市值数据
+df = pd.merge(df_prices, df_mv, on=['trade_date', 'symbol'], how='left')
+logging.info("价格与市值数据合并完毕。")
+
 symbols_list = stock_symbols_list + [BENCHMARK_SYMBOL]
 conn.close()
 logging.info("数据库连接已关闭。股票与指数数据合并完毕。")
