@@ -149,7 +149,8 @@ else:
     top_df = top_day_ret.to_frame('ret')
     top_df['month_end'] = top_df.index.to_period('M').to_timestamp('M')
     
-    top_df['weight'] = top_df['month_end'].map(regime_filter_monthly.map({True: 0.5, False: 1.0})).fillna(1.0)
+    #top_df['weight'] = top_df['month_end'].map(regime_filter_monthly.map({True: 0.5, False: 1.0})).fillna(1.0)
+    top_df['weight'] = top_df['month_end'].map(regime_filter_monthly.map({True: 1.0, False: 0.0})).fillna(1.0)
     top_ret_adj = top_df['ret'] * top_df['weight']
 
     print('\n--- 择时策略回测结果 ---')
@@ -159,7 +160,8 @@ else:
         logging.info(f'【择时后】CAGR: {cagr_adj_val*100:.2f}%')
         logging.info(f'【择时后】夏普: {sharpe_adj_val:.2f}')
         
-        reduced_ret = top_df[top_df['weight']==0.5]['ret'].mean()
-        full_ret = top_df[top_df['weight']==1.0]['ret'].mean()
-        print('降半仓月份(牛市)策略原始日均收益:', reduced_ret)
-        print('满仓月份(熊市)策略原始日均收益:', full_ret)
+        # 修正后的诊断代码
+        bull_ret = top_df[top_df['weight']==1.0]['ret'].mean()
+        bear_ret = top_df[top_df['weight']==0.0]['ret'].mean() # 策略在熊市的原始收益
+        print(f"保留月份(牛市)策略原始日均收益: {bull_ret}")
+        print(f"屏蔽月份(熊市)策略原始日均收益: {bear_ret}")
