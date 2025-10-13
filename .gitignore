@@ -15,3 +15,4 @@ watchlist_update.log
 backtest_moment.log
 spike_trader.log
 backtest.log
+factor_cache/

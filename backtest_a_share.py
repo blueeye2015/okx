@@ -59,8 +59,6 @@ WHERE security_code IN {tuple(stock_symbols_list)}
 """
 df_mv = pd.read_sql_query(mv_query, conn)
 logging.info(f"已从 daily_basic 表获取 {len(df_mv)} 行市值数据。")
-conn.close()
-logging.info("数据库连接已关闭。")
 
 # <<<--- 修改：步骤 2.3: 合并价格与市值数据 ---<<<
 df_prices['trade_date'] = pd.to_datetime(df_prices['trade_date'])
@@ -69,10 +67,57 @@ df_mv['trade_date'] = pd.to_datetime(df_mv['trade_date'])
 df = pd.merge(df_prices, df_mv, on=['trade_date', 'symbol'], how='left')
 logging.info("价格与市值数据合并完毕。")
 
-symbols_list = stock_symbols_list + [BENCHMARK_SYMBOL]
+# <<<--- 新增: 查询业绩数据 ---<<<
+profit_query = f"""
+SELECT security_code as symbol, report_date, deduct_parent_netprofit
+FROM public.profit_sheet
+WHERE security_code IN {tuple(stock_symbols_list)}
+"""
+df_profit = pd.read_sql_query(profit_query, conn)
+logging.info(f"已获取 {len(df_profit)} 行利润表数据。")
 conn.close()
 logging.info("数据库连接已关闭。股票与指数数据合并完毕。")
-df['trade_date'] = pd.to_datetime(df['trade_date'])
+# <<<--- 核心修改区域开始：重写数据合并与排序逻辑 ---<<<
+
+# --- 步骤 2.3: 健壮的数据合并 ---
+
+# 1. 转换日期并删除无效日期行
+df_prices['trade_date'] = pd.to_datetime(df_prices['trade_date'], errors='coerce')
+df_mv['trade_date'] = pd.to_datetime(df_mv['trade_date'], errors='coerce')
+df_profit['report_date'] = pd.to_datetime(df_profit['report_date'], errors='coerce')
+
+df_prices.dropna(subset=['trade_date'], inplace=True)
+df_mv.dropna(subset=['trade_date'], inplace=True)
+df_profit.dropna(subset=['report_date'], inplace=True)
+
+# 2. 合并价格和市值
+df_merged = pd.merge(df_prices, df_mv, on=['trade_date', 'symbol'], how='left')
+
+# 3. 准备业绩数据，重命名日期列以供合并
+df_profit.rename(columns={'report_date': 'trade_date'}, inplace=True)
+
+# 4. 【关键】在 merge_asof 之前，分别对两个DataFrame进行严格排序
+df_merged = df_merged.sort_values(by=['trade_date'])
+df_profit = df_profit.sort_values(by=['trade_date'])
+# 同时，业绩数据中不能有重复的(symbol, trade_date)，否则merge_asof会出错
+df_profit.drop_duplicates(subset=['symbol', 'trade_date'], keep='last', inplace=True)
+df_profit.reset_index(drop=True, inplace=True)
+df_merged.reset_index(drop=True, inplace=True)
+
+# 5. 执行 merge_asof
+logging.info("正在将季度的业绩数据对齐到每日...")
+df = pd.merge_asof(
+    df_merged,
+    df_profit,
+    on='trade_date',
+    by='symbol',
+    direction='backward'
+)
+logging.info("所有数据（价格、市值、业绩）已合并对齐完毕。")
+
+# <<<--- 核心修改区域结束 ---<<<
+
+symbols_list = stock_symbols_list + [BENCHMARK_SYMBOL]
 
 # --- 3. 因子计算（采用分块和缓存新架构） ---
 logging.info('开始计算每日因子（采用分块缓存策略）...')
@@ -170,7 +215,7 @@ else:
     top_df['month_end'] = top_df.index.to_period('M').to_timestamp('M')
     
     #top_df['weight'] = top_df['month_end'].map(regime_filter_monthly.map({True: 0.5, False: 1.0})).fillna(1.0)
-    top_df['weight'] = top_df['month_end'].map(regime_filter_monthly.map({True: 1.0, False: 0.0})).fillna(1.0)
+    top_df['weight'] = top_df['month_end'].map(regime_filter_monthly.map({True: 0.5, False: 1.0})).fillna(1.0)
     top_ret_adj = top_df['ret'] * top_df['weight']
 
     print('\n--- 择时策略回测结果 ---')
@@ -181,7 +226,7 @@ else:
         logging.info(f'【择时后】夏普: {sharpe_adj_val:.2f}')
         
         # 修正后的诊断代码
-        bull_ret = top_df[top_df['weight']==1.0]['ret'].mean()
-        bear_ret = top_df[top_df['weight']==0.0]['ret'].mean() # 策略在熊市的原始收益
+        bull_ret = top_df[top_df['weight']==0.5]['ret'].mean()
+        bear_ret = top_df[top_df['weight']==1.0]['ret'].mean() # 策略在熊市的原始收益
         print(f"保留月份(牛市)策略原始日均收益: {bull_ret}")
         print(f"屏蔽月份(熊市)策略原始日均收益: {bear_ret}")

@@ -68,7 +68,7 @@ def init_worker(price_data, mkt_ret_data):
     worker_mkt_ret_series = mkt_ret_data
 
 def calculate_factors_for_single_symbol(symbol, price_df, mkt_ret_series):
-    g = price_df[price_df['symbol'] == symbol][['trade_date', 'close', 'total_mv']]
+    g = price_df[price_df['symbol'] == symbol][['trade_date', 'close', 'total_mv','deduct_parent_netprofit']]
     if len(g) < MIN_TRAIN_DAYS:
         return None
     
@@ -83,7 +83,22 @@ def calc_daily_factor_monthly_train(df_sym: pd.DataFrame, mkt_ret_series: pd.Ser
     df = df_sym.copy().set_index('trade_date')
     df['return'] = df['close'].pct_change()
     df = df.merge(mkt_ret_series.rename('mkt_ret'), left_index=True, right_index=True, how='left')
-     # <<<--- 新增：计算市值因子特征 ---<<<
+     # --- 1. “底部”形态特征 ---
+    rolling_max_252 = df['close'].rolling(252, min_periods=60).max()
+    rolling_min_252 = df['close'].rolling(252, min_periods=60).min()
+    # 特征1: 当前价格在过去一年区间的位置 (0-1之间, 0代表最低点)
+    df['price_pos_1y'] = (df['close'] - rolling_min_252) / (rolling_max_252 - rolling_min_252)
+    df['price_pos_1y_t1'] = df['price_pos_1y'].shift(1)
+    # 特征2: 近3个月的波动率
+    df['volatility_3m'] = df['return'].rolling(63, min_periods=20).std()
+    df['volatility_3m_t1'] = df['volatility_3m'].shift(1)
+    # --- 2. “业绩困境反转”特征 ---
+    # 扣非净利润(TTM)的同比增长率。pct_change(252)近似计算YoY
+    # 用 fillna(0) 处理期初的NaN，以及业绩不变的情况
+    df['profit_yoy'] = df['deduct_parent_netprofit'].pct_change(periods=252).fillna(0)
+    df['profit_yoy_t1'] = df['profit_yoy'].shift(1)
+
+    # <<<--- 新增：计算市值因子特征 ---<<<
     # 对市值取对数，处理极端值，使其更稳定
     # .clip(lower=1) 防止市值为0或负数时取对数出错
     df['log_mv'] = np.log(df['total_mv'].clip(lower=1))
@@ -102,8 +117,15 @@ def calc_daily_factor_monthly_train(df_sym: pd.DataFrame, mkt_ret_series: pd.Ser
     df['IV'] = df['return'].expanding(MIN_TRAIN_DAYS).apply(
         lambda r: calc_iv(r, df.loc[r.index, 'mkt_ret']), raw=False)
     df['IV_t1'] = df['IV'].shift(1)
-    # <<<--- 修改：将新的市值因子加入特征列表 ---<<<
-    features = ['IV_t1', 'rm_t1', 'P_d_t1', 'N_d_t1', 'log_mv_t1']
+    # <<<--- 修改：将所有新特征加入列表 ---<<<
+    features = [
+        'P_d_t1', 'N_d_t1',         # 动量特征
+        'rm_t1', 'IV_t1',           # 市场与波动特征
+        'log_mv_t1',                # 市值特征
+        'price_pos_1y_t1',          # 底部形态-价格位置
+        'volatility_3m_t1',       # 底部形态-波动率
+        'profit_yoy_t1'             # 业绩困境反转
+    ]
     df_clean = df.dropna(subset=features).copy()
     df_clean['target'] = (df_clean['return'].rolling(21).sum().shift(-21) > 0).astype(int)
     if len(df_clean) < MIN_TRAIN_DAYS + 21: return pd.DataFrame()
