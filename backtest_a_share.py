@@ -11,8 +11,8 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 POSTGRES_CONFIG = dict(
     host='127.0.0.1', port=5432, user='postgres', password='12', dbname='Financialdata'
 )
-START_DATE = '2017-01-03'
-END_DATE = '2025-09-30'
+START_DATE = '2010-01-04'
+END_DATE = '2018-12-31'
 ADJUST_TYPE = 'hfq'
 BENCHMARK_SYMBOL = '000300.SH'
 CHUNK_SIZE = 100
