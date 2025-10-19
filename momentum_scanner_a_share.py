@@ -136,7 +136,9 @@ def calc_daily_factor_monthly_train(df_sym: pd.DataFrame, mkt_ret_series: pd.Ser
         valid_dates = df_clean.index[df_clean.index <= train_end_date]
         if valid_dates.empty: continue
         actual_train_end_date = valid_dates[-1]
-        train_df = df_clean.loc[:actual_train_end_date]
+        # 改成 rolling 36 个月（按日频约 756 根 K 线）
+        window_start = actual_train_end_date - pd.DateOffset(months=36)
+        train_df = df_clean.loc[window_start:actual_train_end_date]
         if len(train_df) < MIN_TRAIN_DAYS: continue
         X_train = train_df[features].dropna()
         y_train = train_df.loc[X_train.index, 'target'].dropna()
