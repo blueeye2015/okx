@@ -16,3 +16,6 @@ backtest_moment.log
 spike_trader.log
 backtest.log
 factor_cache/
+daily_factor/
+backtest_a_share.log
+visual_backtest_dynamic.log

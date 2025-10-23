@@ -11,6 +11,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns          # <<<--- 新增
+from collections import defaultdict
 
 load_dotenv('.env')
 POSTGRES_CONFIG  = os.getenv("DB_DSN1")
@@ -40,28 +41,55 @@ class MLFactorStrategy(bt.Strategy):
         self.trade_history = []
         self.last_rebalance_month = -1
         self.closed_trades = []
-        
+
         logging.info("策略初始化完成。")
 
     def notify_trade(self, trade):
         """
-        当交易关闭时，打印交易详情。
+        兼容任何版本 Backtrader 的 notify_trade：
+        entry_price 用 trade.price
+        exit_price  用最后一笔反向成交的成交价
         """
-        if trade.isclosed:
-            # 2. 当交易关闭时，除了打印，还将详细信息存入列表
-            log_msg = (f"交易完成: {trade.data._name}, 方向: '买入', 毛利: {trade.pnl:.2f}, 净利: {trade.pnlcomm:.2f}")
-            print(log_msg)
-            
-            self.closed_trades.append({
-                'symbol': trade.data._name,
-                # backtrader内部用浮点数表示日期，需要转换回来
-                'open_date': bt.num2date(trade.dtopen).date(),
-                'close_date': bt.num2date(trade.dtclose).date(),
-                'duration_days': trade.barlen,
-                'pnl': trade.pnl,
-                'pnl_net': trade.pnlcomm
-            })
+        if not trade.isclosed:
+            return
 
+        # 1. 基本字段
+        symbol      = trade.data._name
+        open_date   = bt.num2date(trade.dtopen).date()
+        close_date  = bt.num2date(trade.dtclose).date()
+        duration    = trade.barlen
+        size        = int(trade.size)          # 正数
+        entry_price = round(trade.price, 4)    # 开仓均价（官方提供）
+
+        # 2. 平仓价 = 最后一笔反向成交的价钱
+        #    trade.history 是按时间顺序排列的 list，反向成交即为最后一笔
+        exit_price  = round(trade.history[-1].price, 4)
+
+        # 3. 收益 & 盈亏
+        pct_ret = round(exit_price / entry_price - 1, 4)
+        pnl_gross = round(trade.pnl, 2)
+        pnl_net   = round(trade.pnlcomm, 2)
+
+        # 4. 落库
+        self.closed_trades.append({
+            'symbol'       : symbol,
+            'open_date'    : open_date,
+            'close_date'   : close_date,
+            'duration_days': duration,
+            'size'         : size,
+            'entry_price'  : entry_price,
+            'exit_price'   : exit_price,
+            'return'       : pct_ret,
+            'pnl'          : pnl_gross,
+            'pnl_net'      : pnl_net
+        })
+
+        # 5. 可选调试打印
+        if self.p.debug:
+            print(f'{open_date} -> {close_date}  {symbol}  '
+                f'{size}股  {entry_price} → {exit_price}  '
+                f'收益 {pct_ret:.2%}  净利 {pnl_net:.2f}')
+                   
     def next(self):
         """
         Backtrader的核心方法，每个bar（每个交易日）都会被调用一次。
