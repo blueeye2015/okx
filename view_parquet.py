@@ -3,7 +3,7 @@ import os
 
 # --- 1. 配置 ---
 # 请将这里的文件名替换成您想要转换的具体文件名
-parquet_file_path = 'factor_cache/daily_factor_chunk_13.parquet'
+parquet_file_path = 'factor_cache/daily_factor_chunk_3.parquet'
 
 # 自动生成输出的CSV文件名
 # 例如 'factor_cache_v2/daily_factor_chunk_0.parquet' -> 'daily_factor_chunk_0.csv'

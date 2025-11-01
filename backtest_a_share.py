@@ -12,7 +12,7 @@ POSTGRES_CONFIG = dict(
     host='127.0.0.1', port=5432, user='postgres', password='12', dbname='Financialdata'
 )
 START_DATE = '2010-01-04'
-END_DATE = '2025-12-31'
+END_DATE = '2019-12-31'
 ADJUST_TYPE = 'hfq'
 BENCHMARK_SYMBOL = '000300.SH'
 CHUNK_SIZE = 100
@@ -26,9 +26,17 @@ except Exception as e:
     logging.error(f"数据库连接失败: {e}")
     exit()
 
+# <<<--- 核心修改：修正获取股票列表的逻辑，使其包含新上市公司 ---<<<
 sql_symbols = f"""
-SELECT symbol FROM public.stock_history WHERE adjust_type = '{ADJUST_TYPE}' AND symbol != '{BENCHMARK_SYMBOL}'
-GROUP BY symbol HAVING min(trade_date) <= '{START_DATE}'::date AND count(*) >= 756 + 252 ORDER BY symbol
+SELECT symbol 
+FROM public.stock_history 
+WHERE 
+    adjust_type = '{ADJUST_TYPE}' 
+    AND symbol != '{BENCHMARK_SYMBOL}'
+    AND trade_date BETWEEN '{START_DATE}'::date AND '{END_DATE}'::date
+GROUP BY symbol 
+HAVING count(*) > 252 -- 初步过滤：要求股票在回测周期内至少有一年的数据
+ORDER BY symbol
 """
 # <<<--- 核心修改：修正获取股票列表的逻辑 ---<<<
 stock_symbols_list = pd.read_sql_query(sql_symbols, conn)['symbol'].tolist()
@@ -48,7 +56,8 @@ df_index = pd.read_sql_query(index_price_query, conn)
 df_index.rename(columns={'ts_code': 'symbol'}, inplace=True)
 logging.info(f"已从 index_daily 表获取 {len(df_index)} 行指数数据。")
 
-df_prices = pd.concat([df_stocks, df_index], ignore_index=True)
+##df_prices = pd.concat([df_stocks, df_index], ignore_index=True) 这里不合并，市场收益率另外传进去
+df_prices = df_stocks
 
 # <<<--- 新增：步骤 2.2: 查询市值数据 ---<<<
 mv_query = f"""
@@ -117,10 +126,16 @@ logging.info("所有数据（价格、市值、业绩）已合并对齐完毕。
 
 # <<<--- 核心修改区域结束 ---<<<
 
-symbols_list = stock_symbols_list + [BENCHMARK_SYMBOL]
-
+##symbols_list = stock_symbols_list + [BENCHMARK_SYMBOL] 同上，市场收益率另外传进去
+symbols_list = stock_symbols_list
 # --- 3. 因子计算（采用分块和缓存新架构） ---
 logging.info('开始计算每日因子（采用分块缓存策略）...')
+# mkt_ret_series = (df[df['symbol'] == BENCHMARK_SYMBOL]
+#                   .set_index('trade_date')['close']
+#                   .pct_change()
+#                   .rename('mkt_ret'))
+# logging.info("已预先计算完整的沪深300市场收益率序列。")
+
 os.makedirs(CACHE_DIR, exist_ok=True)
 all_daily_factors = []
 
@@ -144,6 +159,15 @@ for i, chunk in enumerate(symbol_chunks):
             continue
 
         date_index = pd.date_range(df_chunk_raw['trade_date'].min(), df_chunk_raw['trade_date'].max(), freq='D')
+
+        ##---------------计算市场收益率--------------------
+        benchmark_df = df_index[df_index['symbol'] == '000300.SH'].copy()
+        benchmark_df = benchmark_df.reindex(date_index).ffill()
+        benchmark_df = benchmark_df.set_index('trade_date').sort_index()
+        benchmark_df['return'] = benchmark_df['close'].pct_change()
+        mkt_ret_series = benchmark_df['return'].dropna()
+        ##---------------------------------------------
+
         aligned_list = []
         for symbol in chunk:
             g = df_chunk_raw[df_chunk_raw['symbol'] == symbol].set_index('trade_date')
@@ -155,7 +179,7 @@ for i, chunk in enumerate(symbol_chunks):
         if not aligned_list: continue
         df_aligned_chunk = pd.concat(aligned_list, ignore_index=True).dropna(subset=['close'])
 
-        _, chunk_factor_df = calc_monthly_ic(df_aligned_chunk, chunk)
+        _, chunk_factor_df = calc_monthly_ic(df_aligned_chunk, chunk, mkt_ret_series)
         
         if chunk_factor_df is not None and not chunk_factor_df.empty:
             chunk_factor_df.to_parquet(chunk_filename)

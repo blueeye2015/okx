@@ -469,7 +469,7 @@ url = "wss://ws.okx.com:8443/ws/v5/business"
 # 持仓总量频道
 # channels = [{"channel": "open-interest", "instId": "BTC-USD-210326"}]
 # K线频道
-channels = [{"channel": "candle1m", "instId": "BTC-USDT"}]
+#channels = [{"channel": "candle1m", "instId": "BTC-USDT"}]
 # 交易频道
 # channels = [{"channel": "trades", "instId": "BTC-USD-201225"}]
 # 预估交割/行权价格频道
@@ -481,7 +481,7 @@ channels = [{"channel": "candle1m", "instId": "BTC-USDT"}]
 # 限价频道
 # channels = [{"channel": "price-limit", "instId": "BTC-USD-201225"}]
 # 深度频道
-# channels = [{"channel": "books", "instId": "BTC-USD-SWAP"}]
+channels = [{"channel": "sprd-books5", "sprdId": "BTC-USDT_BTC-USDT-SWAP"}]
 # 期权定价频道
 # channels = [{"channel": "opt-summary", "uly": "BTC-USD"}]
 # 资金费率频道

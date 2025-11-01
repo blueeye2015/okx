@@ -61,9 +61,16 @@ class MLFactorStrategy(bt.Strategy):
         size        = int(trade.size)          # 正数
         entry_price = round(trade.price, 4)    # 开仓均价（官方提供）
 
-        # 2. 平仓价 = 最后一笔反向成交的价钱
-        #    trade.history 是按时间顺序排列的 list，反向成交即为最后一笔
-        exit_price  = round(trade.history[-1].price, 4)
+        # ---- 关键修正：安全地获取 exit_price ----
+        try:
+            if len(trade.history) > 0:
+                exit_price = round(trade.history[-1].price, 4)
+            else:
+                # history 尚为空，用当前收盘价近似
+                exit_price = round(trade.data.close[0], 4)
+        except Exception:
+            # 兜底方案
+            exit_price = round(trade.data.close[0], 4)
 
         # 3. 收益 & 盈亏
         pct_ret = round(exit_price / entry_price - 1, 4)
@@ -183,7 +190,7 @@ if __name__ == '__main__':
     try:
         conn = psycopg2.connect(POSTGRES_CONFIG)
 
-        # --- 步骤 2.2: 使用交易日缺失率来识别并剔除长期停牌股 ---
+        # # --- 步骤 2.2: 使用交易日缺失率来识别并剔除长期停牌股 ---
         suspension_threshold_ratio = 0.7  # 交易日占比低于70%即认为长期停牌
         sql_suspended = f"""
         WITH MarketDaysPerYear AS (
@@ -214,9 +221,9 @@ if __name__ == '__main__':
         suspended_symbols = pd.read_sql_query(sql_suspended, conn)['symbol'].tolist()
         logging.info(f"清洗规则2: 找到 {len(suspended_symbols)} 只存在长期停牌记录的股票将被剔除 (年交易日占比<{suspension_threshold_ratio:.0%})。")
 
-        # --- 步骤 2.4: 组合排除列表并进行初步清洗 ---
+        # # --- 步骤 2.4: 组合排除列表并进行初步清洗 ---
         pre_cleaned_list = [s for s in stock_symbols_list if s not in suspended_symbols]
-        logging.info(f"初步清洗后，剩余 {len(pre_cleaned_list)} 只股票。")      
+        logging.info(f"初步清洗后，剩余 {len(stock_symbols_list)} 只股票。")      
 
         all_stocks_query = f"SELECT trade_date, symbol, close FROM public.stock_history WHERE symbol IN {tuple(pre_cleaned_list)} AND trade_date BETWEEN '{start_date}'::date AND '{end_date}'::date AND adjust_type = '{ADJUST_TYPE}'"
         df_stocks = pd.read_sql_query(all_stocks_query, conn)

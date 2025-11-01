@@ -56,7 +56,7 @@ def calc_iv(ret_1d: pd.Series, mkt_1d: pd.Series) -> float:
 # 全局变量
 worker_price_df = None
 worker_mkt_ret_series = None
-
+BENCHMARK_SYMBOL = '000300.SH'
 MIN_TRAIN_DAYS = 756
 LGB_PARAMS = dict(objective='binary', n_estimators=100,
                   learning_rate=0.05, num_leaves=10,
@@ -95,7 +95,7 @@ def calc_daily_factor_monthly_train(df_sym: pd.DataFrame, mkt_ret_series: pd.Ser
     # --- 2. “业绩困境反转”特征 ---
     # 扣非净利润(TTM)的同比增长率。pct_change(252)近似计算YoY
     # 用 fillna(0) 处理期初的NaN，以及业绩不变的情况
-    df['profit_yoy'] = df['deduct_parent_netprofit'].pct_change(periods=252, fill_method=None).fillna(0)
+    df['profit_yoy'] = df['deduct_parent_netprofit'].pct_change(periods=365, fill_method=None).fillna(0)
     df['profit_yoy_t1'] = df['profit_yoy'].shift(1)
 
     # <<<--- 新增：计算市值因子特征 ---<<<
@@ -159,10 +159,19 @@ def calc_daily_factor_monthly_train(df_sym: pd.DataFrame, mkt_ret_series: pd.Ser
     return final_factors.reset_index()
 
 
-def calc_monthly_ic(all_data_df: pd.DataFrame, symbols_list: list) -> tuple:
+def calc_monthly_ic(all_data_df: pd.DataFrame, symbols_list: list, mkt_ret_series: pd.Series = None) -> tuple:
     price_df = all_data_df.copy()
     price_df['return'] = price_df.groupby('symbol')['close'].pct_change()
-    mkt_ret_series = price_df.groupby('trade_date')['return'].mean()
+    if mkt_ret_series is None:
+        logging.error('为传入市场收益，程序终止')
+        sys.exit(1)
+    else:
+        mkt_ret_series = price_df.groupby('trade_date')['return'].mean()
+    ##mkt_ret_series = price_df.groupby('trade_date')['return'].mean() #原本用市场平均做市场收益，现改为沪深300
+    # mkt_ret_series = (price_df[price_df['symbol'] == BENCHMARK_SYMBOL]
+    #               .set_index('trade_date')['close']
+    #               .pct_change()
+    #               .rename('mkt_ret'))
     
     factor_list = []
     try:
