@@ -27,8 +27,8 @@ CH_DATABASE = 'marketdata'
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # 数据缓冲配置 (批量插入以提高性能)
-BATCH_SIZE = 100  # 积攒100条数据后批量插入
-MAX_FLUSH_INTERVAL = 5  # 或者每隔5秒插入一次，以防数据量少时长时间不插入
+BATCH_SIZE = 500  # 积攒100条数据后批量插入
+MAX_FLUSH_INTERVAL = 10  # 或者每隔5秒插入一次，以防数据量少时长时间不插入
 data_buffer = []
 last_flush_time = time.time()
 

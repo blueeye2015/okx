@@ -12,7 +12,7 @@ POSTGRES_CONFIG = dict(
     host='127.0.0.1', port=5432, user='postgres', password='12', dbname='Financialdata'
 )
 START_DATE = '2010-01-04'
-END_DATE = '2019-12-31'
+END_DATE = '2025-12-31'
 ADJUST_TYPE = 'hfq'
 BENCHMARK_SYMBOL = '000300.SH'
 CHUNK_SIZE = 100
@@ -250,6 +250,7 @@ else:
         logging.info(f'【择时后】夏普: {sharpe_adj_val:.2f}')
         
         # 修正后的诊断代码
+        
         bull_ret = top_df[top_df['weight']==0.5]['ret'].mean()
         bear_ret = top_df[top_df['weight']==1.0]['ret'].mean() # 策略在熊市的原始收益
         print(f"保留月份(牛市)策略原始日均收益: {bull_ret}")

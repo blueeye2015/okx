@@ -19,3 +19,7 @@ factor_cache/
 daily_factor/
 backtest_a_share.log
 visual_backtest_dynamic.log
+factor_cache_per_stock/
+trade.log
+snapshot_cron.log
+depth_stream_archiver.log

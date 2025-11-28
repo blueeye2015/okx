@@ -68,6 +68,12 @@ def init_worker(price_data, mkt_ret_data):
     worker_mkt_ret_series = mkt_ret_data
 
 def calculate_factors_for_single_symbol(symbol, price_df, mkt_ret_series):
+    """
+    参数:
+        symbol: 股票代码
+        price_df: DataFrame，必须包含列 ['trade_date', 'close', 'total_mv', 'deduct_parent_netprofit', 'symbol']
+        mkt_ret_series: Series，索引为 trade_date，值为市场收益率
+    """
     g = price_df[price_df['symbol'] == symbol][['trade_date', 'close', 'total_mv','deduct_parent_netprofit']]
     if len(g) < MIN_TRAIN_DAYS:
         return None
@@ -124,7 +130,7 @@ def calc_daily_factor_monthly_train(df_sym: pd.DataFrame, mkt_ret_series: pd.Ser
         'log_mv_t1',                # 市值特征
         'price_pos_1y_t1',          # 底部形态-价格位置
         'volatility_3m_t1',       # 底部形态-波动率
-        'profit_yoy_t1'             # 业绩困境反转
+        #'profit_yoy_t1'             # 业绩困境反转
     ]
     df_clean = df.dropna(subset=features).copy()
     df_clean['target'] = (df_clean['return'].rolling(21).sum().shift(-21) > 0).astype(int)

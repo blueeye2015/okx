@@ -5,8 +5,10 @@ import aiohttp
 import ssl
 from datetime import datetime
 import logging
-from typing import Dict, Any
+from typing import Dict, Any,List
 import clickhouse_connect  # 只用这个驱动
+import time 
+
 
 # Windows 特殊处理
 if platform.system() == 'Windows':
@@ -31,14 +33,17 @@ CLICKHOUSE = dict(
 # WebSocket 配置
 WEBSOCKET_URL = "wss://stream.binance.com:9443/ws"
 PROXY = "http://127.0.0.1:7890"  # 不需要就留空 ""
-SYMBOLS = ["ethusdt", "btcusdt", "uxlinkusdt",
-           "pnutusdt", "meusdt", "penguusdt", "moveusdt"]
-
+SYMBOLS = ["ethusdt", "btcusdt"]
+# ---------------- 批量参数 ----------------
+BATCH_SIZE = 500          # 条数阈值
+BATCH_SEC  = 10         # 时间阈值
 
 class BinanceTradeCollector:
     def __init__(self):
         self.client = None
         self.setup_database()
+        self._buf: List[List] = []        # 内存缓存
+        self._last_flush = time.time()
 
     # ----------  建库建表  ----------
     def setup_database(self):
@@ -69,30 +74,41 @@ class BinanceTradeCollector:
             raise
 
     # ----------  插入数据  ----------
-    def insert_trade(self, trade_data: Dict[Any, Any]):
+    def insert_trade(self, trade: Dict[Any, Any]):
+
         try:
-            symbol = trade_data['s']          # BTCUSDT
-            formatted_symbol = f"{symbol[:-4]}-{symbol[-4:]}"  # BTC-USDT
+            self._buf.append([
+            trade['e'],
+            datetime.fromtimestamp(trade['E'] / 1000),
+            f"{trade['s'][:-4]}-{trade['s'][-4:]}".upper(),
+            trade['t'],
+            float(trade['p']),
+            float(trade['q']),
+            int(trade['m']),
+            datetime.fromtimestamp(trade['T'] / 1000)
+        ])
+            # 触批：条数 or 时间
+            if len(self._buf) >= BATCH_SIZE or time.time() - self._last_flush >= BATCH_SEC:
+                self.flush()
+        except Exception as e:
+            logger.error(f"插入数据错误: {e}")
+
+    def flush(self):
+        if not self._buf:
+            return
+        try:
             self.client.insert(
-                "trades",
-                [
-                    [
-                        trade_data['e'],
-                        datetime.fromtimestamp(trade_data['E'] / 1000),
-                        formatted_symbol.upper(),
-                        trade_data['t'],
-                        float(trade_data['p']),
-                        float(trade_data['q']),
-                        int(trade_data['m']),
-                        datetime.fromtimestamp(trade_data['T'] / 1000)
-                    ]
-                ],
+                'trades',
+                self._buf,
                 column_names=['event_type', 'event_time', 'symbol',
                               'trade_id', 'price', 'quantity',
                               'buyer_order_maker', 'trade_time']
             )
+            logger.debug("批量写入 %s 条", len(self._buf))
         except Exception as e:
-            logger.error(f"插入数据错误: {e}")
+            logger.error("批量写入失败: %s", e)
+        self._buf.clear()
+        self._last_flush = time.time()
 
     # ----------  WebSocket 主循环  ----------
     async def handle_websocket(self):

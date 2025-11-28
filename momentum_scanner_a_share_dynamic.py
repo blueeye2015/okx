@@ -136,10 +136,20 @@ def calc_daily_factor_monthly_train(df_sym: pd.DataFrame, mkt_ret_series: pd.Ser
         valid_dates = df_clean.index[df_clean.index <= train_end_date]
         if valid_dates.empty: continue
         actual_train_end_date = valid_dates[-1]
-        # 改成 rolling 36 个月（按日频约 756 根 K 线）
-        window_start = actual_train_end_date - pd.DateOffset(months=36)
-        train_df = df_clean.loc[window_start:actual_train_end_date]
-        if len(train_df) < MIN_TRAIN_DAYS: continue
+        # 获取截止到当前训练日的所有交易日
+        valid_dates_up_to_end = df_clean.index[df_clean.index <= actual_train_end_date]
+        
+        # === 修复：用 continue 跳过当前月份，而非 return 终止函数 ===
+        if len(valid_dates_up_to_end) < MIN_TRAIN_DAYS:
+            logging.debug(  # 改为debug避免日志刷屏
+                f"股票在 {actual_train_end_date.date()} 累计仅{len(valid_dates_up_to_end)}天，"
+                f"不足{MIN_TRAIN_DAYS}天，跳过该月"
+            )
+            continue  # ✅ 关键：继续下一个training_dates
+        
+        # 往前推 MIN_TRAIN_DAYS 个交易日
+        window_start_date = valid_dates_up_to_end[-MIN_TRAIN_DAYS]
+        train_df = df_clean.loc[window_start_date:actual_train_end_date]
         X_train = train_df[features].dropna()
         y_train = train_df.loc[X_train.index, 'target'].dropna()
         if y_train.nunique() < 2: continue
