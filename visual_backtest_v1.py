@@ -29,13 +29,17 @@ class PandasDataWithFactor(bt.feeds.PandasData):
 # --- 2. 核心交易策略 (重大修改) ---
 class MLFactorStrategy(bt.Strategy):
     params = dict(
-        top_n_pct=0.05,          # 优化：更集中 0.1→0.05
-        rebalance_monthday=1,    # 优化：月初调仓 20→1
+        top_n_pct=0.02,          # 优化：更集中 0.1→0.05
+        rebalance_monthday=2,    # 优化：月初调仓 20→1
         benchmark_symbol=BENCHMARK_SYMBOL,
         debug=False,             # 关闭调试日志提升速度
         limit_up_down=0.10,
-        bull_position=0.80,      # 新增：牛市仓位50%→80%
+        bull_position=1.00,      # 新增：牛市仓位50%→80%
         bear_position=1.00,      # 熊市满仓
+        # 新增：止损止盈
+        stop_loss_pct=0.08,      # 15%强制止损
+        take_profit_pct=0.25,    # 25%止盈
+        min_daily_amount=50000000,  # 新增：最小日均成交额5000万
     )
 
     def __init__(self):
@@ -50,6 +54,8 @@ class MLFactorStrategy(bt.Strategy):
         self.closed_trades = []
         self._rebalance_count = 0  # 新增：调仓计数
         self.daily_holdings = []
+        # 新增：记录入场价
+        self.stock_entry_price = defaultdict(lambda: None)
 
         logging.info("策略初始化完成。")
 
@@ -106,6 +112,29 @@ class MLFactorStrategy(bt.Strategy):
         holdings = {d._name: pos.size for d, pos in self.getpositions().items() if pos.size != 0}
         self.daily_holdings.append({'date': self.datetime.date(0), 'holdings': holdings})
 
+        # --- 【严格执行】止损止盈 ---
+        for data, pos in self.getpositions().items():
+            if pos.size == 0: continue
+            
+            entry_price = self.stock_entry_price.get(data._name)
+            if entry_price is None: continue
+            
+            current_price = data.close[0]
+            ret = current_price / entry_price - 1
+            
+            # 止损（8%严格止损）
+            if ret < -self.p.stop_loss_pct:
+                logging.info(f"止损: {data._name} 亏损 {ret:.2%}")
+                self.order_target_percent(data=data, target=0.0)
+                self.stock_entry_price[data._name] = None  # 清除记录
+                continue
+            
+            # 止盈（20%锁定利润）
+            if ret > self.p.take_profit_pct:
+                logging.info(f"止盈: {data._name} 盈利 {ret:.2%}")
+                self.order_target_percent(data=data, target=0.0)
+                self.stock_entry_price[data._name] = None  # 清除记录
+
     def notify_timer(self, timer, when, *args, **kwargs):
         """主调仓逻辑，由timer精确控制"""
         current_month = self.datetime.date(0).month
@@ -137,8 +166,7 @@ class MLFactorStrategy(bt.Strategy):
         rankings = []
        
         for d in self.stocks:
-            # 确保数据有效且因子存在
-            if len(d) > 0 and d.factor[0] > -1:
+            if len(d) > 0 and not np.isnan(d.factor[0]) and d.factor[0] > -1:
                 rankings.append((d.factor[0], d))
         
         rankings.sort(key=lambda x: x[0], reverse=True)
@@ -347,7 +375,7 @@ if __name__ == '__main__':
         if df_sym.empty:
             logging.warning(f"{symbol} 无数据，跳过")
             continue
-        
+        print(f"当前时间{datetime.utcnow()}")
         df_sym['open'] = df_sym['high'] = df_sym['low'] = df_sym['close']
         df_sym['volume'] = 0
         
