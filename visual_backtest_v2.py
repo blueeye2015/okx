@@ -13,10 +13,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from collections import defaultdict
 import time
+import gc
 
 load_dotenv('.env')
 POSTGRES_CONFIG  = os.getenv("DB_DSN1")
-
+REBALANCE_DAY_RANGE = (1, 5) ##1-5开仓
 BENCHMARK_SYMBOL = '000300.SH'
 ADJUST_TYPE = 'hfq'
 CACHE_DIR = 'factor_cache'
@@ -27,6 +28,18 @@ class PandasDataWithFactor(bt.feeds.PandasData):
     lines = ('factor',)
     params = (('factor', -1),)
 
+# ========================
+# 辅助函数：根据股票代码判断涨跌幅限制
+# ========================
+def get_price_limit(symbol: str) -> float:
+    """返回对应股票的涨跌幅限制比例"""
+    if symbol.startswith(('300', '688')):  # 创业板、科创板
+        return 0.20
+    elif symbol.startswith('8'):           # 北交所（如需）
+        return 0.30
+    else:                                  # 主板
+        return 0.10
+    
 # --- 2. 核心交易策略 (重大修改) ---
 class MLFactorStrategy(bt.Strategy):
     params = dict(
@@ -34,7 +47,6 @@ class MLFactorStrategy(bt.Strategy):
         rebalance_monthday=2,    # 优化：月初调仓 20→1
         benchmark_symbol=BENCHMARK_SYMBOL,
         debug=False,             # 关闭调试日志提升速度
-        limit_up_down=0.10,
         bull_position=1.00,      # 新增：牛市仓位50%→80%
         bear_position=1.00,      # 熊市满仓
         # 新增：止损止盈
@@ -145,21 +157,25 @@ class MLFactorStrategy(bt.Strategy):
             self.last_rebalance_month = current_month
 
     def _is_limit_up(self, data):
-        """判断当前是否涨停（前收盘价需存在）"""
-        if len(data) < 2:  # 新股上市首日无前收盘价，允许交易
-            return False
-        prev_close = data.close[-1]
-        limit_price = prev_close * (1 + self.p.limit_up_down)
-        # 考虑价格精度，使用>=判断
-        return data.close[0] >= round(limit_price, 2)
-
-    def _is_limit_down(self, data):
-        """判断当前是否跌停"""
+																 
         if len(data) < 2:
             return False
+        symbol = data._name
+        limit_pct = get_price_limit(symbol)
         prev_close = data.close[-1]
-        limit_price = prev_close * (1 - self.p.limit_up_down)
-        return data.close[0] <= round(limit_price, 2)
+        limit_up = round(prev_close * (1 + limit_pct), 2)
+											 
+        return data.high[0] >= limit_up - 1e-5
+
+    def _is_limit_down(self, data):
+									  
+        if len(data) < 2:
+            return False
+        symbol = data._name
+        limit_pct = get_price_limit(symbol)
+        prev_close = data.close[-1]
+        limit_down = round(prev_close * (1 - limit_pct), 2)
+        return data.low[0] <= limit_down + 1e-5
 
     def rebalance_portfolio(self):
         self._rebalance_count += 1
@@ -320,7 +336,7 @@ if __name__ == '__main__':
         
         placeholders = ','.join(['%s'] * len(stock_symbols_list))
         all_stocks_query = f"""
-            SELECT trade_date, symbol, close 
+            SELECT trade_date, symbol, open, high, low, close 
             FROM public.stock_history 
             WHERE symbol IN ({placeholders}) 
               AND trade_date BETWEEN %s AND %s 
@@ -330,7 +346,7 @@ if __name__ == '__main__':
                                       params=[*stock_symbols_list, start_date, end_date, ADJUST_TYPE])
         
         index_price_query = """
-            SELECT trade_date, ts_code AS symbol, close 
+            SELECT trade_date, ts_code AS symbol, open, high, low, close 
             FROM public.index_daily 
             WHERE ts_code = %s AND trade_date BETWEEN %s AND %s
         """
@@ -355,6 +371,8 @@ if __name__ == '__main__':
     df_all_data.set_index('trade_date', inplace=True)
     df_all_data.sort_index(inplace=True)
     
+    del df_prices,df_factor,df_stocks,df_index
+    gc.collect()
     # --- Cerebro引擎设置 ---
     cerebro = bt.Cerebro()
 
@@ -375,13 +393,12 @@ if __name__ == '__main__':
     # 为每个symbol预处理数据
     symbol_data_map = {}
     for symbol in symbols_to_run:
-        df_sym = df_all_data[df_all_data['symbol'] == symbol][['close', 'factor']]
+        df_sym = df_all_data[df_all_data['symbol'] == symbol][['open', 'high', 'low', 'close', 'factor']]
         if df_sym.empty:
             logging.warning(f"{symbol} 无数据，跳过")
             continue
         
         # 预处理数据
-        df_sym['open'] = df_sym['high'] = df_sym['low'] = df_sym['close']
         df_sym['volume'] = 0
         df_sym.sort_index(inplace=True)  # 确保数据按时间排序
         

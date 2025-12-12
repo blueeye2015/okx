@@ -40,7 +40,7 @@ def get_snapshot(symbol):
 def save_to_db(client, symbol, data):
     if not data: return
     
-    snapshot_time = datetime.utcnow()
+    snapshot_time = datetime.now()
     update_id = data['lastUpdateId']
     rows = []
     

@@ -23,3 +23,9 @@ factor_cache_per_stock/
 trade.log
 snapshot_cron.log
 depth_stream_archiver.log
+backfill_features.log
+backtest_full_dynamic.log
+incremental_features.log
+production_signal.log
+backtest_moment.log
+visual_backtest_v3.log

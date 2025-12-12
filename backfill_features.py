@@ -25,7 +25,8 @@ def get_date_range(client):
 
 def backfill_features():
     client = clickhouse_connect.get_client(**CLICKHOUSE)
-    
+    t_sql = 'truncate table marketdata.features_15m'
+    client.command(t_sql)
     start_date, end_date = get_date_range(client)
     print(f"📅 数据范围: {start_date} -> {end_date}")
     
@@ -34,11 +35,24 @@ def backfill_features():
     while current_date < end_date:
         next_date = current_date + timedelta(days=BATCH_DAYS)
         
-        # 格式化时间字符串用于 SQL
-        t_start = current_date.strftime('%Y-%m-%d %H:%M:%S')
-        t_end = next_date.strftime('%Y-%m-%d %H:%M:%S')
+        # 1. 定义 "计算窗口" (Lookback Window)
+        # 为了让 lag() 能取到上一行，我们往前多取 15 分钟
+        calc_start = current_date - timedelta(minutes=15)
+        calc_end = next_date
         
-        print(f"🔄 正在处理: {t_start} -> {t_end} ...")
+        # 2. 定义 "写入窗口" (Insert Window)
+        # 我们只把真正属于今天的数据写入数据库
+        insert_start = current_date
+        insert_end = next_date
+        
+        t_calc_start = calc_start.strftime('%Y-%m-%d %H:%M:%S')
+        t_calc_end = calc_end.strftime('%Y-%m-%d %H:%M:%S')
+        t_insert_start = insert_start.strftime('%Y-%m-%d %H:%M:%S')
+        t_insert_end = insert_end.strftime('%Y-%m-%d %H:%M:%S')
+
+        print(f"🔄 计算范围: {t_calc_start} -> {t_calc_end}")
+        print(f"💾 写入范围: {t_insert_start} -> {t_insert_end}")
+        
         
         # ----------------------------------------------------
         # 核心 SQL: 插入 features_15m (逻辑与训练时一致)
@@ -56,7 +70,7 @@ def backfill_features():
                     buy_vol - sell_vol as net_cvd
                 FROM marketdata.trades
                 WHERE symbol = '{SYMBOL_TRADE}' 
-                  AND event_time >= '{t_start}' AND event_time < '{t_end}'
+                  AND event_time >= '{t_insert_start}' AND event_time < '{t_insert_end}'
                 GROUP BY time
             ),
             
@@ -74,7 +88,7 @@ def backfill_features():
                         price - lagInFrame(price) OVER (ORDER BY side, price, event_time) as price_diff
                     FROM marketdata.depth
                     WHERE symbol = '{SYMBOL_DEPTH}' 
-                      AND event_time >= '{t_start}' AND event_time < '{t_end}'
+                      AND event_time >= '{t_insert_start}' AND event_time < '{t_insert_end}'
                 )
                 WHERE delta < -1.0 AND price_diff = 0
                 GROUP BY time
@@ -88,7 +102,7 @@ def backfill_features():
                     argMax(price, snapshot_time) as close_bid_price
                 FROM marketdata.depth_snapshot
                 WHERE symbol = '{SYMBOL_DEPTH}' AND side = 'bid'
-                  AND snapshot_time >= '{t_start}' AND snapshot_time < '{t_end}'
+                  AND snapshot_time >= '{t_insert_start}' AND snapshot_time < '{t_insert_end}'
                 GROUP BY time
             )
 
