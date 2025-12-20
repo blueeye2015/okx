@@ -3,7 +3,7 @@ import pandas as pd
 from tqdm import tqdm
 
 # ========= 1. 只改这里 =========
-root_dir = r'factor_cache'   # 你的顶层目录
+root_dir = r'factor_cache_per_stock'   # 你的顶层目录
 # ================================
 
 parquet_files = [os.path.join(dp, f)

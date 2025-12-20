@@ -72,7 +72,7 @@ def force_train(df):
     # 只要有机会，就让它买！哪怕由于误报导致准确率下降，我们要先看到它开单。
     # 0 (观望): 权重 1
     # 1 (买入): 权重 10 (强迫模型重视买入信号)
-    force_weights = {0: 1, 1: 10}
+    force_weights = {0: 1, 1: 5}
     
     # min_samples_leaf=20: 防止过拟合，让规则更通用
     clf = DecisionTreeClassifier(
