@@ -54,7 +54,7 @@ def load_and_clean_data():
     
     # 9. 打标签 (降低门槛到 0.1%，增加正样本)
     df['label'] = 0
-    df.loc[df['next_return'] > 0.1, 'label'] = 1
+    df.loc[df['next_return'] > 0.7, 'label'] = 1
     
     print(f"🧹 有效样本: {len(df)} | 正样本(买入机会): {sum(df['label']==1)}")
     return df

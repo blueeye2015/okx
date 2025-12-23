@@ -28,7 +28,7 @@ load_dotenv('.env')
 POSTGRES_CONFIG = os.getenv("DB_DSN1")
 BENCHMARK_SYMBOL = '000300.SH'
 ADJUST_TYPE = 'hfq'
-CACHE_DIR = 'factor_cache_per_stock'
+CACHE_DIR = 'factor_cache_global'
 INITIAL_CASH = 1000000.0
 
 # 自定义数据加载器
@@ -45,10 +45,31 @@ class PandasDataWithFactor(bt.feeds.PandasData):
         ('openinterest', -1),
     )
 
-def get_price_limit(symbol: str) -> float:
-    if symbol.startswith(('300', '688')): return 0.20
-    elif symbol.startswith('8'): return 0.30
-    else: return 0.10
+def calculate_limit_price(symbol, close_price, direction='up'):
+    """
+    计算 T+1 的涨跌停价格
+    """
+    # 1. 确定涨跌幅比例
+    if symbol.startswith(('300', '688')): # 创业板/科创板
+        ratio = 0.20
+    elif symbol.startswith(('8', '4')):   # 北交所
+        ratio = 0.30
+    else:                                 # 主板 (暂不考虑ST)
+        ratio = 0.10
+        
+    # 2. 计算价格
+    # A股四舍五入机制：保留两位小数
+    if direction == 'up':
+        limit_price = close_price * (1 + ratio)
+        # 修正：简单的一分钱剔除逻辑
+        # 实际买入限价 = 涨停价 - 0.01，确保一字板不成交
+        price = round(limit_price, 2) - 0.01
+    else:
+        limit_price = close_price * (1 - ratio)
+        # 实际卖出限价 = 跌停价 + 0.01，确保一字跌停不卖出
+        price = round(limit_price, 2) + 0.01
+        
+    return price
 
 # 增强版策略
 class MLFactorStrategy(bt.Strategy):
@@ -198,15 +219,15 @@ class MLFactorStrategy(bt.Strategy):
         # 保留定时器作为备用，但不再依赖它
         pass
 
-    def _is_limit_up(self, data):
-        if len(data) < 2: return False
-        limit = get_price_limit(data._name)
-        return data.high[0] >= round(data.close[-1] * (1 + limit), 2) - 0.01
+    # def _is_limit_up(self, data):
+    #     if len(data) < 2: return False
+    #     limit = get_price_limit(data._name)
+    #     return data.high[0] >= round(data.close[-1] * (1 + limit), 2) - 0.01
 
-    def _is_limit_down(self, data):
-        if len(data) < 2: return False
-        limit = get_price_limit(data._name)
-        return data.low[0] <= round(data.close[-1] * (1 - limit), 2) + 0.01
+    # def _is_limit_down(self, data):
+    #     if len(data) < 2: return False
+    #     limit = get_price_limit(data._name)
+    #     return data.low[0] <= round(data.close[-1] * (1 - limit), 2) + 0.01
 
     def rebalance_portfolio(self):
         is_debug_day = (self.datetime.date(0).month == 6 and self.datetime.date(0).day <= 5)
@@ -229,9 +250,9 @@ class MLFactorStrategy(bt.Strategy):
                 reject_counts['low_factor'] += 1
                 continue
             
-            if self._is_limit_up(d):
-                reject_counts['limit_up'] += 1
-                continue
+            # if self._is_limit_up(d):
+            #     reject_counts['limit_up'] += 1
+            #     continue
             
             reject_counts['ok'] += 1
             valid_stocks.append((d.factor[0], d))
@@ -275,17 +296,39 @@ class MLFactorStrategy(bt.Strategy):
         # 调仓执行
         target_names = {d._name for d in target_stocks}
         
+        # 1. 卖出逻辑 (不在目标池的股票)
         for data, pos in self.getpositions().items():
-            if pos.size != 0 and data._name not in target_names and not self._is_limit_down(data):
-                self.order_target_percent(data=data, target=0.0)
+            if pos.size != 0 and data._name not in target_names:
+                # 检查是否跌停：如果 T 日已经跌停，T+1 大概率跑不掉，但这里我们尝试挂单
+                # 计算 T+1 的跌停保护价
+                limit_down_price = calculate_limit_price(data._name, data.close[0], direction='down')
+                
+                # 使用 Limit 单卖出：只有价格 >= 跌停价+0.01 时才成交
+                # 如果 T+1 开盘死封跌停，价格会低于 limit_down_price，订单不会成交 -> 这种被闷杀更真实
+                self.order_target_percent(
+                    data=data, 
+                    target=0.0, 
+                    exectype=bt.Order.Limit, 
+                    price=limit_down_price
+                )
                 self.stock_entry_price[data._name] = None
         
+        # 2. 买入逻辑 (目标池中的股票)
         for i, d in enumerate(target_stocks):
             current_pos = self.getposition(d).size
-            if current_pos == 0 and not self._is_limit_up(d):
-                self.order_target_percent(data=d, target=weights[i])
-                if self.stock_entry_price[d._name] is None:
-                    self.stock_entry_price[d._name] = d.close[0]
+            
+            # 如果当前没有持仓，且 T 日没有涨停 (T日涨停买入是允许的，只要T+1能买进)
+            if current_pos == 0:
+                # 计算 T+1 涨停价的"一分钱下方"
+                limit_buy_price = calculate_limit_price(d._name, d.close[0], direction='up')
+                
+                # 发送限价买单
+                self.order_target_percent(
+                    data=d, 
+                    target=weights[i],
+                    exectype=bt.Order.Limit, # 指定为限价单
+                    price=limit_buy_price    # 设定价格上限
+                )
 
 # 印花税成本模型
 class StampDutyCommissionScheme(bt.CommInfoBase):
@@ -314,6 +357,11 @@ if __name__ == '__main__':
         exit(1)
         
     df_factor = pd.concat([pd.read_parquet(f) for f in chunk_files], ignore_index=True)
+    # 2. 【关键】删除因子文件自带的 'close' 列
+    # 原因：我们的训练脚本为了方便检查保存了 close，但数据库行情里也有 close。
+    #如果不删掉，合并时会出现 close_x, close_y，导致回测报错 KeyError: 'close'。
+    if 'close' in df_factor.columns:
+        df_factor = df_factor.drop(columns=['close'])
     df_factor['trade_date'] = pd.to_datetime(df_factor['trade_date'])
     
     min_date, max_date = df_factor['trade_date'].min(), df_factor['trade_date'].max()

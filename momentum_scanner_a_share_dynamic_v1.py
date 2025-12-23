@@ -58,7 +58,7 @@ def calculate_factors_for_single_symbol(symbol: str, price_df: pd.DataFrame, mkt
     """
     核心增强版：为单只股票计算因子
     """
-    g = price_df[price_df['symbol'] == symbol][['trade_date', 'close', 'total_mv', 'deduct_parent_netprofit', 'volume']]
+    g = price_df[price_df['symbol'] == symbol][['trade_date', 'close', 'total_mv', 'deduct_parent_netprofit', 'volume', 'symbol']]
     if len(g) < MIN_TRAIN_DAYS:
         logging.debug(f'{symbol} 数据不足{MIN_TRAIN_DAYS}天')
         return None
@@ -138,11 +138,12 @@ def calc_daily_factor_monthly_train(df_sym: pd.DataFrame, mkt_ret_series: pd.Ser
     
     # <<<--- 滞后所有特征（防未来函数） ---<<<
     feature_base = [
-        'return_1m', 'return_3m', 'return_6m', 'return_12m',
-        'vol_1m', 'vol_3m', 'vol_12m', 'vol_ratio',
-        'price_pos_63d', 'price_pos_126d', 'price_pos_252d',
-        'turnover_1m_avg', 'trend_score', 'rsi_14', 'macd_hist',
-        'profit_yoy', 'profit_2yoy', 'profit_ttm', 'log_mv'
+        'return_1m', 'return_6m',
+        'vol_ratio',  # 波动率变化（量缩价稳）
+        'price_pos_126d',  # 半年价格位置（低位反转）
+        'turnover_1m_avg', # 换手率（越低越好，或极高时的反转）
+        'profit_ttm', # 估值/盈利能力（防雷） 
+        'log_mv' # 市值
     ]
     
     for feat in feature_base:
@@ -160,7 +161,7 @@ def calc_daily_factor_monthly_train(df_sym: pd.DataFrame, mkt_ret_series: pd.Ser
     
     # 最终特征列表
     features = [f'{feat}_lag' for feat in feature_base] + \
-               ['P_d_t1', 'N_d_t1', 'rm_t1', 'IV_t1']
+               ['IV_t1']
     
     # 数据清洗
     df_clean = df.dropna(subset=features).copy()
@@ -175,6 +176,9 @@ def calc_daily_factor_monthly_train(df_sym: pd.DataFrame, mkt_ret_series: pd.Ser
     scaler = StandardScaler()
     training_dates = df_clean.index.to_period('M').unique().to_timestamp(how='end')
     
+    # <<<--- 🔥 新增 1：初始化重要性记录列表 ---<<<
+    feature_importance_list = []
+
     for i, train_end_date in enumerate(training_dates):
         # 获取当前月份所有交易日
         valid_dates = df_clean.index[df_clean.index <= train_end_date]
@@ -182,8 +186,19 @@ def calc_daily_factor_monthly_train(df_sym: pd.DataFrame, mkt_ret_series: pd.Ser
             continue
         
         actual_train_end_date = valid_dates[-1]
-        train_start_date = actual_train_end_date - pd.DateOffset(months=36)
-        train_df = df_clean.loc[train_start_date:actual_train_end_date]
+        # 2. 【核心修复】设置隔离期（Gap），防止标签泄露
+        # 必须回退 30 天（或 21 个交易日以上），因为你的 Target 是 shift(-21)
+        safe_train_end_date = actual_train_end_date - pd.Timedelta(days=30)
+        
+        # 3. 【日期设定】计算训练开始日期
+        # 逻辑：从“安全截止日”往前推 N 个月
+        # 建议：A股一轮牛熊通常 3-5 年，建议设为 60 个月（5年）能让模型更稳健
+        # 如果追求运算速度，维持 36 个月也可以
+        train_window_months = 60  
+        train_start_date = safe_train_end_date - pd.DateOffset(months=train_window_months)
+        
+        # 4. 切分数据
+        train_df = df_clean.loc[train_start_date:safe_train_end_date]
         
         if len(train_df) < MIN_TRAIN_DAYS:
             continue
@@ -202,6 +217,15 @@ def calc_daily_factor_monthly_train(df_sym: pd.DataFrame, mkt_ret_series: pd.Ser
         X_train_scaled = scaler.fit_transform(X_train)
         model = lgb.LGBMClassifier(**LGB_PARAMS)
         model.fit(X_train_scaled, y_train, sample_weight=sample_weights[:len(X_train)])
+
+        # <<<--- 🔥 新增 2：记录当前月份模型最看重什么 ---<<<
+        # 提取当前模型的特征重要性
+        imp_df = pd.DataFrame({
+            'feature': features,
+            'gain': model.booster_.feature_importance(importance_type='gain'), # gain表示贡献了多少收益
+            'date': actual_train_end_date
+        })
+        feature_importance_list.append(imp_df)
         
         # 预测下月
         pred_start_date = actual_train_end_date + pd.Timedelta(days=1)
@@ -216,6 +240,18 @@ def calc_daily_factor_monthly_train(df_sym: pd.DataFrame, mkt_ret_series: pd.Ser
         month_factors = pd.DataFrame(pred_probas, index=X_pred.index, columns=['factor'])
         all_factors.append(month_factors)
     
+        # <<<--- 🔥 新增 3：循环结束后，汇总并打印平均重要性 ---<<<
+        if feature_importance_list:
+            all_imp = pd.concat(feature_importance_list)
+            # 按特征分组取平均值，从大到小排序
+            summary = all_imp.groupby('feature')['gain'].mean().sort_values(ascending=False)
+            
+            print("\n" + "="*40)
+            print(f"📊 模型心中的“选股秘籍” (Symbol: {df_sym['symbol'].iloc[0]})")
+            print("="*40)
+            # 计算百分比，更直观
+            print((summary / summary.sum() * 100).apply(lambda x: f"{x:.1f}%"))
+            print("="*40 + "\n")
     if not all_factors:
         return pd.DataFrame()
     

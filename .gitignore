@@ -35,3 +35,6 @@ backtest_full_dynamic_v1.log
 visual_backtest_v5.log
 trade_log_enhanced.csv
 trade_log_final.csv
+production_plan_b.log
+cache/
+factor_cache_global/
