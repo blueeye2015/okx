@@ -38,3 +38,7 @@ trade_log_final.csv
 production_plan_b.log
 cache/
 factor_cache_global/
+production_reversal.log
+reversal_signals.csv
+strategy_actions.csv
+binance_trade_websocket_ch.log

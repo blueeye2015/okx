@@ -4,14 +4,13 @@ import numpy as np
 from sklearn.tree import DecisionTreeClassifier, export_text
 from sklearn.model_selection import train_test_split
 
-# --- 配置 ---
+# --- Configuration ---
 CLICKHOUSE = dict(host='localhost', port=8123, database='marketdata', username='default', password='12')
-# 注意：我们需要 High/Low 数据，所以还是要连 trades 表
-SYMBOL = 'BTC-USDT' 
-SYMBOL_F = 'BTCUSDT'
+SYMBOL = 'BTC-USDT'   # For trades table
+SYMBOL_F = 'BTCUSDT'  # For features table
 
 def load_data():
-    print("🚀 正在构建数据 (支持跨K线持仓)...")
+    print("🚀 Building data (High/Low required for dip catching)...")
     client = clickhouse_connect.get_client(**CLICKHOUSE)
     sql = f"""
     WITH 
@@ -42,14 +41,14 @@ def load_data():
 def feature_engineering(df):
     df = df.replace([np.inf, -np.inf], np.nan).dropna()
     
-    # 1. 波动率特征
+    # 1. Volatility Features
     df['amplitude'] = (df['high'] - df['low']) / df['open'] * 100
     df['prev_amp'] = df['amplitude'].shift(1)
     df['wall_volatility'] = df['wall_shift_pct'].rolling(4).std()
     df['cvd_abs'] = df['net_cvd'].abs()
     
-    # 2. 目标：预测当前 K 线是否适合"接针" (波动大)
-    df['label'] = (df['amplitude'] > 0.6).astype(int) # 只要振幅够大，就有机会接到
+    # 2. Target: Predict if current candle is "catchable" (high volatility)
+    df['label'] = (df['amplitude'] > 0.6).astype(int) 
     
     df = df.dropna()
     return df
@@ -61,7 +60,7 @@ def run_extended_backtest(df):
     
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, shuffle=False)
     
-    print("🧠 训练弹性网格猎手...")
+    print("🧠 Training Elastic Grid Hunter...")
     clf = DecisionTreeClassifier(
         max_depth=3, 
         criterion='entropy', 
@@ -72,106 +71,125 @@ def run_extended_backtest(df):
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
     
-    print("\n⚔️ 开启跨K线狩猎 (Buy Dip, Sell Rally)...")
+    print("\n⚔️ Hunting Season Open (Buy Dip, Sell Rally)...")
     
-    # --- 策略参数 ---
-    BUY_DROP = 0.006  # 下跌 0.3% 挂买单接针
-    SELL_RISE = 0.006 # 反弹 0.6% 止盈 (相对于买入价)
-    STOP_LOSS = 0.010 # 止损 1.5% (防止单边暴跌)
-    MAX_HOLD = 16     # 最多拿 4小时 (16根K线)
+    # --- Strategy Params ---
+    BUY_DROP = 0.006  # Buy limit at -0.6% from Open
+    SELL_RISE = 0.006 # TP at +0.6% from Entry
+    STOP_LOSS = 0.015 # SL at -1.5% from Entry
+    MAX_HOLD = 16     # Max hold 4 hours
     
-    # --- 状态机变量 ---
-    position = None # 存储字典: {'price': 90000, 'entry_time': idx, 'stop_loss': 88000, 'take_profit': 90600}
+    # --- State Machine ---
+    position = None 
+    trade_records = [] # Store details of every trade
     
-    trade_count = 0
-    wins = 0
-    losses = 0
-    timeout_exits = 0
-    
-    logs = []
-    
-    # 遍历测试集
-    # 注意：我们需要按照时间顺序逐根扫描
+    # Iterate through Test Set
     indices = X_test.index
     
     for i in range(len(indices)):
         idx = indices[i]
+        curr_time = df.loc[idx, 'time']
         curr_open = df.loc[idx, 'open']
         curr_high = df.loc[idx, 'high']
         curr_low = df.loc[idx, 'low']
         curr_close = df.loc[idx, 'close']
         
-        # 1. 如果有持仓，检查是否止盈/止损/超时
+        # 1. Manage Existing Position
         if position is not None:
             entry_price = position['price']
+            entry_time = position['entry_time']
             tp_price = position['take_profit']
             sl_price = position['stop_loss']
             bars_held = i - position['entry_idx']
             
-            # A. 检查是否止损 (最高优先级)
-            if curr_low <= sl_price:
-                pnl = (sl_price - entry_price) / entry_price
-                losses += 1
-                logs.append(pnl)
-                position = None # 平仓
-                continue # 这一根K线处理完了
-                
-            # B. 检查是否止盈
-            if curr_high >= tp_price:
-                pnl = (tp_price - entry_price) / entry_price
-                wins += 1
-                logs.append(pnl)
-                position = None # 平仓
-                continue
+            exit_reason = None
+            exit_price = 0.0
+            pnl_pct = 0.0
             
-            # C. 检查是否超时
-            if bars_held >= MAX_HOLD:
-                # 强平
-                pnl = (curr_close - entry_price) / entry_price
-                timeout_exits += 1
-                if pnl > 0: wins += 1
-                else: losses += 1
-                logs.append(pnl)
-                position = None
-                continue
+            # A. Check Stop Loss (Priority 1)
+            if curr_low <= sl_price:
+                exit_price = sl_price
+                exit_reason = "❌ Stop Loss"
+            
+            # B. Check Take Profit (Priority 2)
+            elif curr_high >= tp_price:
+                exit_price = tp_price
+                exit_reason = "✅ Take Profit"
+            
+            # C. Check Timeout (Priority 3)
+            elif bars_held >= MAX_HOLD:
+                exit_price = curr_close
+                if exit_price > entry_price:
+                    exit_reason = "⌛ Timeout (Win)"
+                else:
+                    exit_reason = "⌛ Timeout (Loss)"
+            
+            # Process Exit
+            if exit_reason:
+                pnl_pct = (exit_price - entry_price) / entry_price
                 
-        # 2. 如果空仓，检查是否开单
+                trade_records.append({
+                    'Entry Time': entry_time,
+                    'Entry Price': round(entry_price, 2),
+                    'Exit Time': curr_time,
+                    'Exit Price': round(exit_price, 2),
+                    'Type': exit_reason,
+                    'Hold Bars': bars_held,
+                    'Return %': round(pnl_pct * 100, 2),
+                    'PnL ($1000)': round(1000 * pnl_pct, 2)
+                })
+                
+                position = None # Close position
+                continue # Done for this candle
+                
+        # 2. Open New Position
         if position is None:
-            # 只有 AI 预测波动大，且这一根K线确实跌下来了，才能接到
+            # AI predicts high volatility -> Place Limit Buy
             if y_pred[i] == 1:
                 limit_buy_price = curr_open * (1 - BUY_DROP)
                 
-                # 检查这一根 K 线是否触及买单
+                # Check if price dropped enough to fill the order
                 if curr_low <= limit_buy_price:
-                    # 成交！
-                    trade_count += 1
+                    # Filled!
                     position = {
                         'price': limit_buy_price,
+                        'entry_time': curr_time,
                         'entry_idx': i,
                         'take_profit': limit_buy_price * (1 + SELL_RISE),
                         'stop_loss': limit_buy_price * (1 - STOP_LOSS)
                     }
-                    # 注意：如果当根K线波动极大，可能直接止盈或止损，这里简化处理，下一根K线结算
+                    # Simplified: We assume fill happens, exit logic handled next bar
     
-    # --- 统计结果 ---
-    total_pnl = sum(logs) - (trade_count * 0.0005 * 2) # 扣手续费
+    # --- Reporting ---
+    print("\n" + "="*80)
+    print(f"🕸️ ELASTIC GRID DETAILED LEDGER")
+    print("="*80)
     
-    print("\n" + "="*40)
-    print(f"🕸️ 弹性网格战报")
-    print("="*40)
-    print(f"🔥 开仓次数: {trade_count}")
-    if trade_count > 0:
-        win_rate = wins / (wins + losses + timeout_exits)
-        print(f"🎯 胜率: {win_rate:.2%} (止盈+超时盈利)")
-        print(f"✅ 止盈次数: {wins}")
-        print(f"❌ 止损次数: {losses}")
-        print(f"⌛ 超时平仓: {timeout_exits}")
-        print(f"💰 累计净回报: {total_pnl*100:.2f}%")
-        print(f"📈 平均单笔: {np.mean(logs)*100:.2f}%")
+    if len(trade_records) > 0:
+        df_trades = pd.DataFrame(trade_records)
+        df_trades['Cum PnL'] = df_trades['PnL ($1000)'].cumsum()
+        
+        # Display settings
+        pd.set_option('display.max_rows', None)
+        pd.set_option('display.width', 1000)
+        pd.set_option('display.expand_frame_repr', False)
+        
+        # Print the ledger
+        print(df_trades[['Entry Time', 'Entry Price', 'Exit Time', 'Type', 'Return %', 'PnL ($1000)', 'Cum PnL']])
+        
+        # Statistics
+        wins = len(df_trades[df_trades['Return %'] > 0])
+        total_pnl = df_trades['PnL ($1000)'].sum()
+        
+        print("-" * 80)
+        print(f"🔥 Total Trades: {len(df_trades)}")
+        print(f"🎯 Win Rate: {wins / len(df_trades):.2%}")
+        print(f"💰 Total PnL (per $1000): ${total_pnl:.2f}")
+        
     else:
-        print("❄️ 没有开单")
+        print("❄️ No trades triggered.")
 
-    print("\n📜 猎手直觉 (Tree Rules):")
+    print("\n📜 Hunter's Intuition (Tree Rules):")
     print(export_text(clf, feature_names=features))
 
 if __name__ == "__main__":

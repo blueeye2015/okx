@@ -77,6 +77,9 @@ def generate_signal():
 
     current_time = df_latest['time'].iloc[0]
     current_price = df_latest['close_price'].iloc[0]
+
+    # 1. 获取当前系统时间 (机器人的手表时间)
+    system_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
     # 必须保证特征顺序与训练时完全一致！
     feature_cols = ['wall_shift_pct', 'spoofing_ratio', 'cvd_zscore', 'dist_ema96', 'trend_flow_resonance']
@@ -120,6 +123,7 @@ def generate_signal():
 
     # 6. 保存到 CSV (追加模式)
     output_row = {
+        'Log_Time': system_time, # [新增] 系统记录时间
         'Time': current_time,
         'Price': current_price,
         'Signal': signal,

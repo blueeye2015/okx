@@ -23,6 +23,7 @@ import seaborn as sns
 from collections import defaultdict
 import time
 import gc
+import csv
 
 load_dotenv('.env')
 POSTGRES_CONFIG = os.getenv("DB_DSN1")
@@ -45,31 +46,60 @@ class PandasDataWithFactor(bt.feeds.PandasData):
         ('openinterest', -1),
     )
 
-def calculate_limit_price(symbol, close_price, direction='up'):
+def calculate_limit_price(symbol, close_price, trade_date, direction='up', debug=False):
     """
-    计算 T+1 的涨跌停价格
+    计算 T+1 的涨跌停挂单价 (适配创业板历史规则)
+    
+    :param symbol: 股票代码
+    :param close_price: 昨日收盘价
+    :param trade_date: 当前交易日期
+    :param direction: 'up' (买入/涨停) / 'down' (卖出/跌停)
+    :param debug: 是否打印调试信息
     """
-    # 1. 确定涨跌幅比例
-    if symbol.startswith(('300', '688')): # 创业板/科创板
+    # 转换为 Timestamp 以支持比较
+    current_dt = pd.Timestamp(trade_date)
+    START_DATE_CHINEXT_20PCT = pd.Timestamp('2020-08-24')
+    
+    # --- 1. 判定板块与涨跌幅比例 ---
+    ratio = 0.10      # 默认主板 10%
+    board_name = "主板"
+    
+    if symbol.startswith('688'):
         ratio = 0.20
-    elif symbol.startswith(('8', '4')):   # 北交所
+        board_name = "科创板"
+        
+    elif symbol.startswith('300'):
+        if current_dt >= START_DATE_CHINEXT_20PCT:
+            ratio = 0.20
+            board_name = "创业板(注册制)"
+        else:
+            ratio = 0.10
+            board_name = "创业板(核准制)"
+            
+    elif symbol.startswith(('8', '4')):
         ratio = 0.30
-    else:                                 # 主板 (暂不考虑ST)
-        ratio = 0.10
-        
-    # 2. 计算价格
-    # A股四舍五入机制：保留两位小数
+        board_name = "北交所"
+    
+    # --- 2. 计算挂单价格 ---
     if direction == 'up':
-        limit_price = close_price * (1 + ratio)
-        # 修正：简单的一分钱剔除逻辑
-        # 实际买入限价 = 涨停价 - 0.01，确保一字板不成交
-        price = round(limit_price, 2) - 0.01
+        # 涨停买入：挂单价 = 涨停价 - 1分钱 (防止一字板成交)
+        limit_val = close_price * (1 + ratio)
+        # 简单的四舍五入
+        exec_price = round(limit_val, 2) - 0.01
+        arrow = "🔺"
     else:
-        limit_price = close_price * (1 - ratio)
-        # 实际卖出限价 = 跌停价 + 0.01，确保一字跌停不卖出
-        price = round(limit_price, 2) + 0.01
-        
-    return price
+        # 跌停卖出：挂单价 = 跌停价 + 1分钱 (防止一字跌停成交)
+        limit_val = close_price * (1 - ratio)
+        exec_price = round(limit_val, 2) + 0.01
+        arrow = "nm" # unicode for arrow down is usually 🔻 but let's stick to safe chars or green
+        arrow = "🔻"
+
+    # --- 3. 打印详细提示 (你想要的部分) ---
+    if debug:
+        print(f"[{current_dt.date()}] {arrow} {direction.upper()} | {symbol} | {board_name} | "
+              f"昨收:{close_price:.2f} x (1±{ratio:.0%}) = 计算价:{limit_val:.2f} -> 挂单:{exec_price:.2f}")
+
+    return exec_price
 
 # 增强版策略
 class MLFactorStrategy(bt.Strategy):
@@ -80,6 +110,10 @@ class MLFactorStrategy(bt.Strategy):
         stop_loss_base=0.08,
         take_profit_base=0.25,
         volatility_lookback=20,
+        # 🔥 新增参数，默认为空字典
+        ipo_mapping={},
+        stock_names={}, # 静态字典(备用)
+        name_history={},   # 🔥 动态历史字典
     )
 
     def __init__(self):
@@ -107,6 +141,53 @@ class MLFactorStrategy(bt.Strategy):
         self.closed_trades = []
         self.stock_entry_price = defaultdict(lambda: None)
         self.first_bar = True
+        self.trade_max_size = defaultdict(float)
+
+        # 🔥🔥🔥 1. 新增：动作日志列表 (用于生成实战指令单)
+        self.action_log = []
+
+    def get_current_stock_name(self, symbol, current_date):
+        """
+        根据当前日期，获取股票当时的真实名称 (判断 ST 的关键)
+        """
+        # 1. 优先查历史变更表
+        history = self.p.name_history.get(symbol)
+        
+        if history:
+            # history 是一个按时间排序的 list: [(date1, name1), (date2, name2)...]
+            # 我们需要找到 start_date <= current_date 的最后一条记录
+            
+            # 简单遍历法 (因为变更记录通常很少，遍历很快)
+            found_name = None
+            for start_date, name in history:
+                if start_date <= current_date:
+                    found_name = name
+                else:
+                    # 因为是按时间排序的，如果 start_date 超过了当前日期，后面的都不用看了
+                    break
+            
+            if found_name:
+                return found_name
+        
+        # 2. 如果查不到历史 (比如新股或者数据缺失)，回退到静态字典
+        return self.p.stock_names.get(symbol, "Unknown")
+    
+    def log_action(self, date, symbol, action, price, weight, reason):
+        """记录单步操作到日志"""
+        # 打印到控制台 (可选)
+        if self.p.debug:
+            print(f"[{date}] {action:<4} | {symbol} | 价:{price:.2f} | 仓:{weight:.1%} | 因:{reason}")
+            
+        # 存入列表
+        self.action_log.append({
+            'date': date,
+            'symbol': symbol,
+            'name': self.p.stock_names.get(symbol, symbol),
+            'action': action, # BUY, SELL, HOLD
+            'price': price,
+            'target_weight': weight,
+            'reason': reason
+        })
 
     def next(self):
         # =================================================================
@@ -114,23 +195,45 @@ class MLFactorStrategy(bt.Strategy):
         # =================================================================
         current_date = self.datetime.date(0)
         
+        # --- 每日持仓巡检 (告诉你现在手里有什么) ---
+        # 只在有操作的那天打印，或者每月1号打印，避免日志爆炸
+        # 这里设置为：只要有持仓，每天都记录一条 "HOLD" 状态，方便画图或核对
+        # (为了节省CSV体积，这里我设置为每月1号记录一次持仓快照)
+        if current_date.day == 1:
+            total_val = self.broker.getvalue()
+            cash = self.broker.getcash()
+
+            for data, pos in self.getpositions().items():
+                if pos.size != 0 and data._name != BENCHMARK_SYMBOL:
+                    val = pos.size * data.close[0]
+                    #这里直接用外面算好的 total_val，不用再重复获取
+                    if total_val > 0:
+                        weight = val / total_val
+                    else:
+                        weight = 0
+                    self.log_action(current_date, data._name, "HOLD", data.close[0], weight, "月初持仓快照")
+
+            # 2. 记录现金仓位
+            if total_val > 0:
+                cash_weight = cash / total_val
+                if cash_weight > 0.001: # 现金占比 > 0.1% 才记录
+                    self.log_action(current_date, "CASH", "HOLD", 1.0, cash_weight, "闲置现金/避险资金")
+
         # 首根K线立即调仓（确保有初始持仓）
-        if self.first_bar:
-            print(f"[{current_date}] 首根K线，强制调仓！")
-            self.rebalance_portfolio()
-            self.first_bar = False
-            self.last_rebalance_month = current_date.month
-            return
+        # if self.first_bar:
+        #     print(f"[{current_date}] 首根K线，强制调仓！")
+        #     self.rebalance_portfolio()
+        #     self.first_bar = False
+        #     self.last_rebalance_month = current_date.month
+        #     return
         
         # 每月1号调仓（主逻辑）
-        if current_date.day == self.p.rebalance_monthday:
-            print(f"[{current_date}] 定时调仓触发")
-            self.rebalance_portfolio()
-            self.last_rebalance_month = current_date.month
-        
-        # 月底保险调仓（防止定时器失效）
-        elif current_date.day >= 28 and self.last_rebalance_month != current_date.month:
-            print(f"[{current_date}] 月底保险调仓触发")
+        # =================================================================
+        # 🎯 修复：更稳健的月度调仓逻辑 (防止跳过假期)
+        # =================================================================
+        # 逻辑：只要当前月份 != 上次调仓月份，说明这是本月的第一个交易日
+        if current_date.month != self.last_rebalance_month:
+            print(f"[{current_date}] 新月份首个交易日 -> 触发调仓")
             self.rebalance_portfolio()
             self.last_rebalance_month = current_date.month
         
@@ -187,6 +290,9 @@ class MLFactorStrategy(bt.Strategy):
             # 执行
             ret = data.close[0] / entry - 1
             if ret < -dynamic_stop or ret > dynamic_profit:
+                reason = "止损" if ret < 0 else "止盈"
+                # 🔥🔥🔥 记录风控操作
+                self.log_action(current_date, data._name, "SELL", data.close[0], 0.0, f"{reason}({ret:.2%})")
                 print(f"[{current_date}] {data._name} 止盈止损平仓: {ret:.2%}")
                 self.order_target_percent(data=data, target=0.0)
                 self.stock_entry_price[data._name] = None
@@ -197,13 +303,26 @@ class MLFactorStrategy(bt.Strategy):
         
         symbol = trade.data._name
             
-            # ✅ 正确计算收益率
-        position_cost = trade.price * abs(trade.size)
-        pct_ret = trade.pnlcomm / position_cost if position_cost > 0 else 0
-            
-            # ✅ 增加买卖价格（后复权）
-        entry_price = trade.price  # 开仓均价（后复权）
-        exit_price = trade.data.close[0]  # 平仓价（后复权）
+        # 2. 获取价格信息
+        entry_price = trade.price  # 开仓均价 (BT自带，非常准确)
+        exit_price = trade.data.close[0]  # 平仓时的市价 (近似值)
+        
+        # 3. 计算成本 (Plan A)
+        max_size = self.trade_max_size.get(trade.ref, 0)
+        position_cost = entry_price * max_size
+        
+        # 4. 计算收益率 (含 Plan B 兜底)
+        pct_ret = 0.0
+        
+        if position_cost > 0:
+            # Plan A: 标准计算 (净利润 / 总成本)
+            pct_ret = trade.pnlcomm / position_cost
+        else:
+            # Plan B: 兜底计算 (如果成本为0，说明是超短线交易没抓到 Size)
+            # 直接用 (卖出价 - 买入价) / 买入价
+            # 这种情况下无法精确扣除手续费占比，但比 0 准确得多
+            if entry_price > 0:
+                pct_ret = (exit_price - entry_price) / entry_price
             
         self.closed_trades.append({
             'symbol': symbol,
@@ -231,12 +350,17 @@ class MLFactorStrategy(bt.Strategy):
 
     def rebalance_portfolio(self):
         is_debug_day = (self.datetime.date(0).month == 6 and self.datetime.date(0).day <= 5)
-        
+        # 获取当前日期
+        current_date = self.datetime.date(0)
         # 筛选有效股票
         valid_stocks = []
-        reject_counts = {'nan_close': 0, 'nan_factor': 0, 'low_factor': 0, 'limit_up': 0, 'ok': 0}
+        reject_counts = {'nan_close': 0, 'nan_factor': 0, 'low_factor': 0, 'limit_up': 0, 'ST': 0, 'ok': 0}
         
         for d in self.stocks:
+            stock_name = self.p.stock_names.get(d._name, "Unknown")
+            # 🔥🔥🔥 使用动态名称查询 🔥🔥🔥
+            # 这一步至关重要！在 2020 年它会返回 '*ST同洲'，在 2025 年返回 '同洲电子'
+            stock_name = self.get_current_stock_name(d._name, current_date)
             # 过滤条件
             if len(d) == 0 or np.isnan(d.close[0]) or d.close[0] < 0.01:
                 reject_counts['nan_close'] += 1
@@ -253,6 +377,13 @@ class MLFactorStrategy(bt.Strategy):
             # if self._is_limit_up(d):
             #     reject_counts['limit_up'] += 1
             #     continue
+            # if self._is_limit_up(d):
+            #     reject_counts['limit_up'] += 1
+            #     continue
+
+            # if 'ST' in stock_name:
+            #     reject_counts['ST'] += 1
+            #     continue
             
             reject_counts['ok'] += 1
             valid_stocks.append((d.factor[0], d))
@@ -264,6 +395,7 @@ class MLFactorStrategy(bt.Strategy):
             print(f"  - 因子缺失: {reject_counts['nan_factor']}")
             print(f"  - 因子无效: {reject_counts['low_factor']}")
             print(f"  - 涨停不可买: {reject_counts['limit_up']}")
+            print(f"  - ST不可买: {reject_counts['ST']}")
             print(f"  - ✅ 最终入选: {reject_counts['ok']}")
         
         if not valid_stocks:
@@ -293,15 +425,21 @@ class MLFactorStrategy(bt.Strategy):
         else:
             weights = np.ones(len(target_stocks)) / len(target_stocks) * self.target_position_ratio
         
+        # 计算权重 (简化为等权，也可保留原本的归一化逻辑)
+        weight_per_stock = self.target_position_ratio / len(target_stocks)
+
         # 调仓执行
         target_names = {d._name for d in target_stocks}
-        
+                
         # 1. 卖出逻辑 (不在目标池的股票)
         for data, pos in self.getpositions().items():
             if pos.size != 0 and data._name not in target_names:
+                # 🔥🔥🔥 记录卖出操作
+                self.log_action(current_date, data._name, "SELL", data.close[0], 0.0, "换仓移出")
+
                 # 检查是否跌停：如果 T 日已经跌停，T+1 大概率跑不掉，但这里我们尝试挂单
                 # 计算 T+1 的跌停保护价
-                limit_down_price = calculate_limit_price(data._name, data.close[0], direction='down')
+                limit_down_price = calculate_limit_price(data._name, data.close[0], current_date, direction='down', debug=True)
                 
                 # 使用 Limit 单卖出：只有价格 >= 跌停价+0.01 时才成交
                 # 如果 T+1 开盘死封跌停，价格会低于 limit_down_price，订单不会成交 -> 这种被闷杀更真实
@@ -319,8 +457,10 @@ class MLFactorStrategy(bt.Strategy):
             
             # 如果当前没有持仓，且 T 日没有涨停 (T日涨停买入是允许的，只要T+1能买进)
             if current_pos == 0:
+                # 🔥🔥🔥 记录买入操作
+                self.log_action(current_date, d._name, "BUY", d.close[0], weight_per_stock, "月度轮动")
                 # 计算 T+1 涨停价的"一分钱下方"
-                limit_buy_price = calculate_limit_price(d._name, d.close[0], direction='up')
+                limit_buy_price = calculate_limit_price(d._name, d.close[0], current_date, direction='up', debug=True)
                 
                 # 发送限价买单
                 self.order_target_percent(
@@ -329,6 +469,18 @@ class MLFactorStrategy(bt.Strategy):
                     exectype=bt.Order.Limit, # 指定为限价单
                     price=limit_buy_price    # 设定价格上限
                 )
+    
+    def stop(self):
+        # 回测结束时，保存指令单
+        print(f"\n正在导出实战指令单 -> strategy_actions.csv ...")
+        
+        fieldnames = ['date', 'symbol', 'name', 'action', 'price', 'target_weight', 'reason']
+        with open('strategy_actions.csv', 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(self.action_log)
+        
+        print(f"✅ 导出完成！请用 Excel 打开查看详细操作记录。")
 
 # 印花税成本模型
 class StampDutyCommissionScheme(bt.CommInfoBase):
@@ -420,6 +572,44 @@ if __name__ == '__main__':
         f"SELECT trade_date, symbol, open, high, low, close, volume FROM stock_history WHERE symbol IN ({placeholders}) AND trade_date BETWEEN %s AND %s AND adjust_type=%s",
         conn, params=[*stock_syms, min_date, max_date, ADJUST_TYPE]
     )
+
+    # -----------------------------------------------------------
+    # 🔥 新增：加载 IPO 上市日期数据
+    # -----------------------------------------------------------
+    logging.info("2.1 加载证券基础信息 (IPO日期)...")
+    df_basic = pd.read_sql_query(
+        "SELECT symbol, list_date, name FROM stock_basic", 
+        conn
+    )
+    # 转换为字典: {'000001': datetime.date(1991, 4, 3), ...}
+    # 注意处理可能的 None/Nat，如果有空值，默认给一个很早的日期
+    df_basic['list_date'] = pd.to_datetime(df_basic['list_date']).dt.date
+    ipo_dict = df_basic.set_index('symbol')['list_date'].to_dict()
+
+    # 🔥 新增：生成 name 字典
+    name_dict = df_basic.set_index('symbol')['name'].to_dict()
+    
+    # -----------------------------------------------------------
+    # 🔥🔥🔥 新增：加载股票曾用名历史 (解决 ST 状态回溯问题)
+    # -----------------------------------------------------------
+    logging.info("2.2 加载股票曾用名历史...")
+    
+    # 1. 读取数据 (按代码和开始时间排序)
+    sql_name = """
+    SELECT security_code as symbol, start_date, name 
+    FROM public.stock_namechange 
+    ORDER BY security_code, start_date
+    """
+    df_name_change = pd.read_sql_query(sql_name, conn)
+
+    df_name_change['start_date'] = pd.to_datetime(df_name_change['start_date']).dt.date
+
+    # 3. 构建时间轴字典
+    # 格式: { '002052': [ (date(2010,1,1), '同洲电子'), (date(2019,1,1), '*ST同洲')... ] }
+    name_history_dict = defaultdict(list)
+    for _, row in df_name_change.iterrows():
+        name_history_dict[row['symbol']].append( (row['start_date'], row['name']) )
+        
     conn.close()
     
     df_stocks['trade_date'] = pd.to_datetime(df_stocks['trade_date'])
@@ -465,7 +655,8 @@ if __name__ == '__main__':
     # 初始化Cerebro
     cerebro = bt.Cerebro()
     cerebro.broker.setcash(INITIAL_CASH)
-    cerebro.addstrategy(MLFactorStrategy)
+    cerebro.addstrategy(MLFactorStrategy, ipo_mapping=ipo_dict, name_history=name_history_dict, # 🔥 名字历史参数
+                        stock_names=name_dict)
     
     # 添加Benchmark
     start_dt = FULL_TIMELINE[0].to_pydatetime()

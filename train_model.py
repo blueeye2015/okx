@@ -11,13 +11,13 @@ SYMBOL = 'BTCUSDT'
 MODEL_PATH = '/data/okx/universal_model.pkl'
 
 # 策略参数 (Plan B: 短平快)
-FEE_THRESHOLD = 0.35         # 目标: 30分钟内涨 0.35% (扣费后赚 0.25% 就跑)
-CONFIDENCE_THRESHOLD = 0.60  # 门槛 60%
+FEE_THRESHOLD = 1.2         # 目标: 30分钟内涨 0.35% (扣费后赚 0.25% 就跑)
+CONFIDENCE_THRESHOLD = 0.70  # 门槛 60%
 ABNORMAL_WALL_THRES = 50.0   
 
 # 回测风控参数
-TP_PCT = 0.006  # 止盈 0.6% (微观爆发通常就在 0.5%~0.8% 之间)
-SL_PCT = 0.010  # 止损 1.0% (给波动留空间)
+TP_PCT = 0.02  # 止盈 0.6% (微观爆发通常就在 0.5%~0.8% 之间)
+SL_PCT = 0.015  # 止损 1.0% (给波动留空间)
 
 def load_data():
     print("🚀 正在加载数据...")
