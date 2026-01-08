@@ -42,3 +42,7 @@ production_reversal.log
 reversal_signals.csv
 strategy_actions.csv
 binance_trade_websocket_ch.log
+production_reversal2.log
+reversal_signals2.csv
+auto_trader_rest.log
+global_rolling_train.log

@@ -145,6 +145,8 @@ class MLFactorStrategy(bt.Strategy):
 
         # 🔥🔥🔥 1. 新增：动作日志列表 (用于生成实战指令单)
         self.action_log = []
+        # 🔥🔥🔥 新增：用于画图的净值记录列表
+        self.net_value_history = []
 
     def get_current_stock_name(self, symbol, current_date):
         """
@@ -296,6 +298,14 @@ class MLFactorStrategy(bt.Strategy):
                 print(f"[{current_date}] {data._name} 止盈止损平仓: {ret:.2%}")
                 self.order_target_percent(data=data, target=0.0)
                 self.stock_entry_price[data._name] = None
+
+        # 🔥🔥🔥 新增：每天收盘前记录日期和总资产
+        # 注意：放在 next 的最后一行
+        self.net_value_history.append({
+            'date': self.datetime.date(0),
+            'value': self.broker.getvalue(),
+            'cash': self.broker.getcash()
+        })    
 
     def notify_trade(self, trade):
         if not trade.isclosed or trade.data._name == BENCHMARK_SYMBOL:
@@ -711,3 +721,61 @@ if __name__ == '__main__':
             print("⚠️ 无交易记录")
     else:
         logging.error("回测返回空结果")
+
+    print("\n正在绘制收益曲线...")
+    
+    # 1. 提取策略净值数据
+    df_equity = pd.DataFrame(strat.net_value_history)
+    df_equity['date'] = pd.to_datetime(df_equity['date'])
+    df_equity.set_index('date', inplace=True)
+    
+    # 计算策略收益率 (净值 / 初始资金 - 1)
+    # 假设初始资金是 10,000,000 (或者从 broker 获取初始值)
+    real_initial_cash = df_equity['value'].iloc[0] 
+    df_equity['strategy_return'] = df_equity['value'] / real_initial_cash - 1
+    
+    # 2. 获取基准收益率 (Benchmark)
+    # 假设 data0 是沪深300
+    benchmark_data = strat.datas[0]
+    # 提取基准的时间和收盘价
+    bm_dates = [bt.num2date(d) for d in benchmark_data.datetime.array]
+    bm_close = list(benchmark_data.close.array)
+    df_benchmark = pd.DataFrame({'close': bm_close}, index=bm_dates)
+    
+    # 截取与回测区间相同的时间段
+    df_benchmark = df_benchmark.loc[df_equity.index[0]:df_equity.index[-1]]
+    # 计算累计收益率 (归一化)
+    df_benchmark['benchmark_return'] = df_benchmark['close'] / df_benchmark['close'].iloc[0] - 1
+    
+    # 3. 开始画图
+    plt.figure(figsize=(12, 8))
+    
+    # 上半部分：收益率曲线
+    ax1 = plt.subplot(2, 1, 1)
+    ax1.plot(df_equity.index, df_equity['strategy_return'], label='Strategy (策略)', color='red', linewidth=2)
+    ax1.plot(df_benchmark.index, df_benchmark['benchmark_return'], label='Benchmark (沪深300)', color='gray', linestyle='--', alpha=0.7)
+    
+    # 填充正收益和负收益区域
+    ax1.fill_between(df_equity.index, df_equity['strategy_return'], 0, where=(df_equity['strategy_return']>=0), color='red', alpha=0.1)
+    ax1.fill_between(df_equity.index, df_equity['strategy_return'], 0, where=(df_equity['strategy_return']<0), color='green', alpha=0.1)
+    
+    ax1.set_title(f'Strategy vs Benchmark Equity Curve (Total Return: {df_equity["strategy_return"].iloc[-1]:.2%})', fontsize=14)
+    ax1.grid(True, which='both', linestyle='--', alpha=0.5)
+    ax1.legend(loc='upper left')
+    
+    # 下半部分：最大回撤 (Drawdown)
+    ax2 = plt.subplot(2, 1, 2, sharex=ax1)
+    
+    # 计算回撤
+    running_max = df_equity['value'].cummax()
+    drawdown = (df_equity['value'] - running_max) / running_max
+    
+    ax2.fill_between(df_equity.index, drawdown, 0, color='blue', alpha=0.3)
+    ax2.set_title(f'Max Drawdown (最大回撤: {drawdown.min():.2%})', fontsize=12)
+    ax2.grid(True, linestyle='--', alpha=0.5)
+    ax2.set_ylabel('Drawdown')
+    
+    # 保存图片
+    plt.tight_layout()
+    plt.savefig('backtest_result_chart.png', dpi=300)
+    print(f"✅ 图表已保存为 backtest_result_chart.png，请打开查看！")
