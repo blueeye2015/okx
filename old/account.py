@@ -1,6 +1,6 @@
 import okex.Account_api as Account
 import json
-from api_parser import parse_positions, parse_orderlist, parse_balance
+from old.api_parser import parse_positions, parse_orderlist, parse_balance
 import logging
 from regular_err import SpecialJumpException
 

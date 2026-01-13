@@ -1,4 +1,4 @@
-from account import OkexAccountManager
+from old.account import OkexAccountManager
 
 if __name__ == '__main__':
     # API凭证

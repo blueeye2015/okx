@@ -4,12 +4,15 @@ import json
 import os
 import logging
 import math
+import csv
 from urllib.parse import urlencode, quote
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import pandas as pd
 import base64
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 # 加载环境变量
 load_dotenv('/data/okx/.env')
@@ -21,19 +24,24 @@ API_KEY = os.getenv('BINANCE_API_KEY', '').strip()
 SECRET_KEY = os.getenv('BINANCE_SECRET_KEY', '').strip()
 
 BASE_URL = 'https://fapi.binance.com'
-SIGNAL_CSV_PATH = '/data/okx/reversal_signals2.csv'
+
+# 信号文件路径
+SIGNAL_PATH = '/data/okx/reversal_signals2.csv'  # 只读取 Reversal 2
+
+# 交易账本路径
+HISTORY_LOG_PATH = '/data/okx/bot_trade_history.csv'
 
 # 交易参数
 SYMBOL = 'BTCUSDT'
 LEVERAGE = 5
-USDT_AMOUNT = 20.0     # 每次投入本金
+USDT_AMOUNT = 200.0    # 单次开仓本金 (既然只跑一个策略，可以把资金集中起来，比如200U)
 
-# 风控参数 (优先使用CSV信号里的价格，如果没有则用下面的默认比例)
-DEFAULT_TP_RATE = 0.040  # 止盈扩大到 4.0% (吃大肉)
-DEFAULT_SL_RATE = 0.010  # 止损保持 1.0% (严格风控)
-BREAKEVEN_TRIGGER = 0.012 # [新增] 浮盈达到 1.2% 时，触发保本损
+# 风控参数 (全局兜底)
+DEFAULT_TP_RATE = 0.040  # 止盈 4.0%
+DEFAULT_SL_RATE = 0.010  # 止损 1.0%
+BREAKEVEN_TRIGGER = 0.012 # 保本触发
 
-CHECK_INTERVAL = 3
+CHECK_INTERVAL = 5
 PROXIES = {
     'http': 'http://127.0.0.1:7890',
     'https': 'http://127.0.0.1:7890'
@@ -46,16 +54,30 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("auto_trader_v3.log"),
+        logging.FileHandler("auto_trader_v5.log"),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger()
 
 # ==========================================
-# 3. 核心 API 封装 (无需变动)
+# 3. 核心 API 封装 (Ed25519)
 # ==========================================
 TIME_OFFSET = 0
+
+# 【新增】创建一个全局 Session 对象，复用 TCP 连接
+# 这能极大减少握手次数，解决 "Connection reset" 问题
+session = requests.Session()
+retries = Retry(
+    total=3,                # 最大重试次数
+    backoff_factor=0.5,     # 失败后等待时间: 0.5s, 1s, 2s...
+    status_forcelist=[500, 502, 503, 504, 104], # 遇到这些状态码重试
+    allowed_methods=["GET", "POST", "DELETE"]
+)
+# 挂载重试适配器
+session.mount('https://', HTTPAdapter(max_retries=retries))
+# 设置代理到 Session 级别
+session.proxies.update(PROXIES)
 
 def sync_server_time():
     global TIME_OFFSET
@@ -74,7 +96,6 @@ def get_signature(payload):
     private_key_str = SECRET_KEY.strip()
     if not private_key_str.startswith("-----BEGIN"):
         private_key_str = f"-----BEGIN PRIVATE KEY-----\n{private_key_str}\n-----END PRIVATE KEY-----"
-    
     try:
         private_key = load_pem_private_key(private_key_str.encode('utf-8'), password=None)
         signature = private_key.sign(payload.encode('utf-8'))
@@ -87,45 +108,75 @@ def send_request(method, endpoint, params=None):
     if params is None: params = {}
     params['timestamp'] = int(time.time() * 1000) + TIME_OFFSET
     params['recvWindow'] = 60000
-    
     query_string = urlencode(params)
     signature = get_signature(query_string)
     full_url = f"{BASE_URL}{endpoint}?{query_string}&signature={quote(signature)}"
-    
     headers = {'X-MBX-APIKEY': API_KEY, 'Content-Type': 'application/json'}
-    
     try:
-        response = requests.request(method, full_url, headers=headers, proxies=PROXIES, timeout=10)
+        response = session.request(method, full_url, headers=headers, timeout=(5, 10))
         if response.status_code >= 400:
             logger.error(f"API Error ({response.status_code}): {response.text}")
             return None
         return response.json()
+    except requests.exceptions.ConnectionError as e:
+        # 专门捕获连接重置错误，并不再打印堆栈，只打印警告
+        logger.warning(f"⚠️ 网络抖动 (Connection Reset)，将自动重试... {e}")
     except Exception as e:
         logger.error(f"Request Exception: {e}")
         return None
 
 # ==========================================
-# 4. 业务逻辑函数 (增强健壮性)
+# 4. 账户记录模块 (New!)
+# ==========================================
+def record_transaction(strategy_source, action, price, quantity, pnl=0, note=""):
+    """
+    记录交易流水到 CSV
+    """
+    file_exists = os.path.exists(HISTORY_LOG_PATH)
+    
+    # 估算手续费 (Taker 0.05%)
+    fee = (price * quantity) * 0.0005
+    
+    # 获取当前账户余额 (为了记录资金曲线)
+    balance = 0
+    try:
+        res = send_request('GET', '/fapi/v2/balance')
+        if res:
+            for b in res:
+                if b['asset'] == 'USDT':
+                    balance = float(b['balance'])
+                    break
+    except: pass
+
+    now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    with open(HISTORY_LOG_PATH, mode='a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        # 写表头
+        if not file_exists:
+            writer.writerow(['Time', 'Strategy', 'Action', 'Price', 'Quantity', 'Fee(Est)', 'PnL', 'Balance', 'Note'])
+        
+        writer.writerow([now_str, strategy_source, action, price, quantity, round(fee, 4), round(pnl, 4), round(balance, 2), note])
+    
+    logger.info(f"📝 交易已记录: {action} {quantity} @ {price} (PnL: {pnl})")
+
+# ==========================================
+# 5. 业务逻辑函数
 # ==========================================
 def init_exchange():
-    """初始化杠杆和持仓模式"""
-    logger.info("⚙️ 初始化交易所设置...")
+    logger.info("⚙️ 初始化交易所...")
     send_request('POST', '/fapi/v1/leverage', {'symbol': SYMBOL, 'leverage': LEVERAGE})
     try:
-        # 强制单向持仓
         res = send_request('GET', '/fapi/v1/positionSide/dual')
         if res and res['dualSidePosition']:
-            logger.info("⚠️ 切换为单向持仓模式...")
             send_request('POST', '/fapi/v1/positionSide/dual', {'dualSidePosition': 'false'})
-    except Exception as e:
-        logger.warning(f"持仓模式检查跳过: {e}")
+    except: pass
 
 def get_current_price(symbol):
     res = send_request('GET', '/fapi/v1/ticker/price', {'symbol': symbol})
     return float(res['price']) if res else None
 
 def get_position(symbol):
-    """获取当前持仓"""
     res = send_request('GET', '/fapi/v2/positionRisk', {'symbol': symbol})
     if res:
         for pos in res:
@@ -134,124 +185,30 @@ def get_position(symbol):
                 return {
                     'side': 'LONG' if amt > 0 else 'SHORT',
                     'amount': abs(amt),
-                    'pnl': float(pos['unrealizedProfit'])
+                    'entry_price': float(pos['entryPrice']),
+                    'pnl': float(pos['unRealizedProfit'])
                 }
     return None
 
 def cancel_open_orders(symbol):
-    """【关键】取消所有挂单"""
-    logger.info("🧹 撤销所有挂单(止盈止损)...")
+    logger.info("🧹 撤销挂单...")
     send_request('DELETE', '/fapi/v1/allOpenOrders', {'symbol': symbol})
 
 def place_order(symbol, side, quantity, order_type='MARKET', price=None, reduce_only=False, stop_price=None):
-    """通用下单函数"""
     params = {
-        'symbol': symbol,
-        'side': side.upper(),
-        'type': order_type,
-        'quantity': quantity,
+        'symbol': symbol, 'side': side.upper(), 'type': order_type, 'quantity': quantity
     }
     if reduce_only: params['reduceOnly'] = 'true'
     if price: params['price'] = price
     if stop_price: params['stopPrice'] = stop_price
-    
     if order_type in ['STOP_MARKET', 'TAKE_PROFIT_MARKET']:
         params['closePosition'] = 'true'
         del params['quantity']
     
     res = send_request('POST', '/fapi/v1/order', params)
     if res and 'orderId' in res:
-        logger.info(f"✅ 订单成功 ({side} {order_type}): ID {res['orderId']}")
         return res
     return None
-
-def check_and_move_sl_to_breakeven():
-    """
-    巡航监控：如果浮盈达标，将止损上移至开仓价 (保本)
-    """
-    try:
-        # 1. 获取当前持仓
-        pos = get_position(SYMBOL)
-        if not pos: return # 空仓不处理
-
-        price = get_current_price(SYMBOL)
-        if not price: return
-
-        # 2. 计算当前浮盈比例 (不带杠杆)
-        entry_price = float(pos['entry_price'])
-        if pos['side'] == 'LONG':
-            pnl_pct = (price - entry_price) / entry_price
-        else:
-            return # 我们只做多，忽略空单逻辑
-
-        # 3. 判断是否触发保本逻辑
-        if pnl_pct > BREAKEVEN_TRIGGER:
-            # 获取当前所有挂单
-            open_orders = send_request('GET', '/fapi/v1/openOrders', {'symbol': SYMBOL})
-            if not open_orders: return
-
-            # 找到现有的止损单 (STOP_MARKET)
-            current_sl_order = None
-            for order in open_orders:
-                if order['type'] == 'STOP_MARKET':
-                    current_sl_order = order
-                    break
-            
-            # 如果没有止损单，或者止损单价格已经比开仓价高了(已经保护过了)，就跳过
-            if current_sl_order:
-                current_stop_price = float(current_sl_order['stopPrice'])
-                
-                # 稍微加一点点手续费 buffer (比如 entry * 1.001)
-                new_stop_price = round(entry_price * 1.001, 1)
-
-                # 只有当 新止损 > 旧止损 时才修改 (只上移，不下移)
-                if new_stop_price > current_stop_price:
-                    logger.info(f"💰 浮盈达标 ({pnl_pct*100:.2f}%)，触发保本逻辑！")
-                    logger.info(f"🛡️ 修改止损: {current_stop_price} -> {new_stop_price} (保本+微利)")
-                    
-                    # 币安修改订单接口 (PUT /fapi/v1/order) - 也可以先撤后挂，修改接口更稳
-                    # 但为了代码简单通用，我们采用：撤销旧止损 -> 挂新止损
-                    
-                    # 1. 撤销旧止损
-                    send_request('DELETE', '/fapi/v1/order', {
-                        'symbol': SYMBOL, 
-                        'orderId': current_sl_order['orderId']
-                    })
-                    
-                    # 2. 挂新止损 (STOP_MARKET)
-                    # 注意：止损单不需要 quantity 参数如果 reduceOnly=true 不支持，
-                    # 最好是用 place_order 的 closePosition=true 模式
-                    place_order(SYMBOL, 'SELL', pos['amount'], order_type='STOP_MARKET', stop_price=new_stop_price)
-
-    except Exception as e:
-        logger.error(f"保本监控出错: {e}")
-
-def close_position(pos):
-    """
-    【封装】安全平仓逻辑
-    1. 撤销所有挂单 (防止平仓后止损单被误触)
-    2. 市价全平
-    """
-    logger.info(f"🛡️ 正在平掉 {pos['side']} 仓位...")
-    
-    # 1. 先撤单
-    cancel_open_orders(SYMBOL)
-    
-    # 2. 再平仓
-    side = 'SELL' if pos['side'] == 'LONG' else 'BUY'
-    
-    # 简单的重试机制
-    for i in range(3):
-        res = place_order(SYMBOL, side, pos['amount'], reduce_only=True)
-        if res:
-            logger.info("🎉 平仓成功，落袋为安。")
-            return True
-        else:
-            logger.warning(f"⚠️ 平仓失败，第 {i+1} 次重试...")
-            time.sleep(1)
-            
-    logger.error("❌❌❌ 严重警告：平仓失败，请手动检查！")
-    return False
 
 def calculate_quantity(price, usdt_amt, leverage):
     if price <= 0: return 0.0
@@ -262,137 +219,192 @@ def calculate_quantity(price, usdt_amt, leverage):
     return qty
 
 # ==========================================
-# 5. 信号执行逻辑 (只做多 + 平仓)
+# 6. 核心交易执行逻辑 (V5 并行版)
 # ==========================================
-def execute_trade(signal_row):
-    sig_val = int(signal_row['Signal']) 
-    sig_type = signal_row.get('Type', 'Unknown')
-    
-    price = get_current_price(SYMBOL)
-    if not price: return
-    
+
+def execute_trade(signal_row, price):
+    # 1. 获取当前仓位状态
     pos = get_position(SYMBOL)
     
-    # ==========================================
-    # 场景 A: 做多信号 (Signal = 1) -> 开仓 / 持有
-    # ==========================================
+    sig_val = int(signal_row['Signal'])
+    
+    # === 场景 A: 做多信号 (1) ===
     if sig_val == 1:
-        logger.info(f"\n⚡ 收到开多信号: {sig_type}")
+        # 如果空仓，开多
+        if not pos:
+            logger.info(f"🚀 [Signal 1] 发现做多信号，当前空仓，执行开仓！")
+            qty = calculate_quantity(price, USDT_AMOUNT, LEVERAGE)
+            
+            cancel_open_orders(SYMBOL)
+            if place_order(SYMBOL, 'BUY', qty):
+                record_transaction("OPEN_LONG", price, qty)
+                
+                # 挂止盈止损
+                csv_tp = float(signal_row.get('TP_Price', 0))
+                csv_sl = float(signal_row.get('SL_Price', 0))
+                # 优先用 CSV 价格，没有则用默认
+                tp = csv_tp if csv_tp > price else price * (1 + DEFAULT_TP_RATE)
+                sl = csv_sl if csv_sl < price and csv_sl > 0 else price * (1 - DEFAULT_SL_RATE)
+                
+                logger.info(f"🛡️ 挂单风控: SL {round(sl,1)} | TP {round(tp,1)}")
+                # 等1秒确保成交
+                time.sleep(1) 
+                # 这里我们直接用 qty 挂止损，因为刚开仓，持仓量等于 qty
+                # 如果怕网络延迟导致持仓没更新，可以用 closePosition=true 模式(不需要qty)
+                place_order(SYMBOL, 'SELL', qty, order_type='STOP_MARKET', stop_price=round(sl,1))
+                place_order(SYMBOL, 'SELL', qty, order_type='TAKE_PROFIT_MARKET', stop_price=round(tp,1))
         
-        # 1. 如果已有多单 -> 保持不动 (或者可以加仓，这里暂且保持)
-        if pos and pos['side'] == 'LONG':
-            logger.info("🍵 当前已持有优质多单，继续持有。")
-            return
-            
-        # 2. 如果有空单 (异常情况) -> 立即平掉，准备反手
-        if pos and pos['side'] == 'SHORT':
-            logger.info("🔄 发现空单，立即平仓反手...")
-            close_position(pos)
+        # 如果已持有做多，则忽略 (防止重复加仓)
+        elif pos['side'] == 'LONG':
+            logger.info("🍵 [Signal 1] 收到做多信号，但已持仓，继续持有。")
         
-        # 3. 执行开仓
-        qty = calculate_quantity(price, USDT_AMOUNT, LEVERAGE)
-        logger.info(f"🚀 执行开多: {qty} BTC")
-        
-        # 开单前先清理可能的残留挂单
-        cancel_open_orders(SYMBOL) 
-        
-        if place_order(SYMBOL, 'BUY', qty):
-            # 4. 挂止盈止损 (OTOCO)
-            csv_tp = float(signal_row.get('TP_Price', 0))
-            csv_sl = float(signal_row.get('SL_Price', 0))
-            
-            # 优先用 CSV 里的价格，没有则用默认比例
-            tp_price = csv_tp if csv_tp > price else price * (1 + DEFAULT_TP_RATE)
-            sl_price = csv_sl if csv_sl < price and csv_sl > 0 else price * (1 - DEFAULT_SL_RATE)
-            
-            # 精度修正
-            tp_price = round(tp_price, 1)
-            sl_price = round(sl_price, 1)
-            
-            logger.info(f"🛡️ 部署风控: 止盈 {tp_price} | 止损 {sl_price}")
-            
-            # 挂单
-            place_order(SYMBOL, 'SELL', qty, order_type='STOP_MARKET', stop_price=sl_price)
-            place_order(SYMBOL, 'SELL', qty, order_type='TAKE_PROFIT_MARKET', stop_price=tp_price)
-
-    # ==========================================
-    # 场景 B: 做空信号 (Signal = -1) -> 仅仅平仓 / 空仓
-    # ==========================================
+        # 如果持有空单(异常情况)，先平仓再反手(或者直接平仓)
+        elif pos['side'] == 'SHORT':
+            logger.info("🔄 [Signal 1] 持有空单，平仓反手...")
+            cancel_open_orders(SYMBOL)
+            place_order(SYMBOL, 'BUY', pos['amount'], reduce_only=True)
+            # 这里简单处理，先平仓，下一轮循环再开多
+    
+    # === 场景 B: 做空信号 (-1) ===
     elif sig_val == -1:
-        logger.info(f"\n🛑 收到做空(顶部)信号: {sig_type}")
-        
-        # 1. 如果有多单 -> 立即平仓逃顶
+        # 如果持有多单，必须平仓逃顶
         if pos and pos['side'] == 'LONG':
-            logger.info("🏃‍♂️ 触发逃顶逻辑，平掉多单...")
-            close_position(pos)
-            logger.info("✅ 已空仓，等待回调。")
-            
-        # 2. 如果为空仓 -> 保持观望，不开空
-        elif not pos:
-            logger.info("👀 当前空仓，信号指示顶部风险，继续观望 (不执行开空)。")
-            
-        # 3. 如果有空单 -> 保持
+            logger.info(f"🏃‍♂️ [Signal -1] 触发逃顶信号！平掉多单...")
+            cancel_open_orders(SYMBOL)
+            if place_order(SYMBOL, 'SELL', pos['amount'], reduce_only=True):
+                record_transaction("ESCAPE_LONG", pos['entry_price'], pos['amount'], pos['pnl'])
+                logger.info("✅ 逃顶成功，已空仓。")
+        
+        # 如果空仓，则观望
         else:
-            logger.info("🍵 持有空单中。")
+            logger.info("🛑 [Signal -1] 收到做空信号，当前空仓，保持观望。")
+
+def close_position(source_name, pos):
+    """
+    执行平仓逻辑
+    """
+    logger.info(f"🏃‍♂️ [{source_name}] 触发平仓/逃顶...")
+    cancel_open_orders(SYMBOL)
+    
+    side = 'SELL' if pos['side'] == 'LONG' else 'BUY'
+    res = place_order(SYMBOL, side, pos['amount'], reduce_only=True)
+    
+    if res:
+        # 记录账本
+        # 注意：这里记录的是大致的 Realized PnL，准确值需要查 UserTrades，这里用未结盈亏近似记录
+        record_transaction(source_name, "CLOSE_ALL", pos['entry_price'], pos['amount'], pos['pnl'], "Escape/Exit")
+        logger.info("✅ 平仓成功。")
+
+def check_breakeven():
+    """保本逻辑"""
+    try:
+        pos = get_position(SYMBOL)
+        if not pos or pos['side'] != 'LONG': return
+        
+        price = get_current_price(SYMBOL)
+        if not price: return
+        
+        entry = pos['entry_price']
+        pnl_pct = (price - entry) / entry
+        
+        if pnl_pct > BREAKEVEN_TRIGGER:
+            open_orders = send_request('GET', '/fapi/v1/openOrders', {'symbol': SYMBOL})
+            if not open_orders: return
+            
+            curr_sl = None
+            for o in open_orders: 
+                if o['type'] == 'STOP_MARKET': 
+                    curr_sl = float(o['stopPrice'])
+                    break
+            
+            new_sl = round(entry * 1.001, 1)
+            
+            # 如果没有止损单，或者新止损 > 旧止损
+            if curr_sl is None or new_sl > curr_sl:
+                logger.info(f"💰 浮盈 {pnl_pct*100:.2f}%，触发保本 (SL -> {new_sl})")
+                cancel_open_orders(SYMBOL)
+                # 重新挂止损，止盈
+                # 注意：这里简单暴力全撤全挂，防止漏单
+                place_order(SYMBOL, 'SELL', pos['amount'], order_type='STOP_MARKET', stop_price=new_sl)
+                # 止盈单如果被撤了要补回去吗？为了简单，这里建议只管止损，止盈可以不补或者补一个默认的
+                # 实盘中最好只修改止损单，不撤止盈。但API修改复杂。
+                # 简单处理：补一个 4% 的默认止盈
+                tp_default = round(entry * (1 + DEFAULT_TP_RATE), 1)
+                place_order(SYMBOL, 'SELL', pos['amount'], order_type='TAKE_PROFIT_MARKET', stop_price=tp_default)
+                
+    except Exception as e:
+        logger.error(f"保本检查错: {e}")
 
 # ==========================================
-# 6. 主程序
+# 7. 信号读取器
 # ==========================================
-def get_latest_signal():
+def get_signal(path):
     try:
-        if not os.path.exists(SIGNAL_CSV_PATH): return None
-        df = pd.read_csv(SIGNAL_CSV_PATH)
+        if not os.path.exists(path): return None
+        df = pd.read_csv(path)
         if df.empty: return None
         return df.iloc[-1]
-    except Exception as e:
-        logger.error(f"CSV 读取错误: {e}")
-        return None
+    except: return None
 
+# ==========================================
+# 8. 主循环
+# ==========================================
 def main():
-    logger.info("🦈 自动交易机器人 V3 (Long-Only + Escape Mode) 启动...")
-    logger.info(f"💰 单笔本金: {USDT_AMOUNT} U | 杠杆: {LEVERAGE}x")
-    logger.info("📝 策略模式: 收到做多信号开多，收到做空信号平多 (不开空)")
+    logger.info("🦈 Auto Trader V5 (双核并行 + 独立账本) 启动...")
+    logger.info(f"📂 监听策略2: {SIGNAL_PATH} (Reversal 2)")
+    logger.info(f"📒 交易账本: {HISTORY_LOG_PATH}")
     
     sync_server_time()
     init_exchange()
     
-    last_sig = get_latest_signal()
-    last_processed_time = last_sig['Time'] if last_sig is not None else None
+    # 初始化信号时间状态
+    last_time_2 = None
     
-    logger.info(f"⏳ 监控中... (最后信号: {last_processed_time})")
+
+    
+    s2 = get_signal(SIGNAL_PATH)
+    if s2 is not None: last_time_2 = s2['Time']
+    
+    logger.info("⏳ 监控开始...")
 
     while True:
         try:
-            latest_sig = get_latest_signal()
-            
-            if latest_sig is not None:
-                curr_time = latest_sig['Time']
-                
-                # 检查新信号
-                if curr_time != last_processed_time:
-                    # 检查时效 (15分钟内)
-                    sig_dt = pd.to_datetime(curr_time)
-                    now_dt = datetime.now(sig_dt.tz)
-                    
-                    if (now_dt - sig_dt).total_seconds() < 900:
-                        execute_trade(latest_sig)
-                        last_processed_time = curr_time
-                    else:
-                        logger.warning(f"⚠️ 信号已过期，跳过: {curr_time}")
-                        last_processed_time = curr_time
-                        
-            # ==============================
-            # [新增] 每轮循环都检查一次保本
-            # ==============================
-            check_and_move_sl_to_breakeven()
+            current_price = get_current_price(SYMBOL)
+            if not current_price:
+                time.sleep(CHECK_INTERVAL)
+                continue
 
+            # --- 2. 处理 Reversal 2 (多 + 逃顶) ---
+            sig2 = get_signal(SIGNAL_PATH)
+            if sig2 is not None and sig2['Time'] != last_time_2:
+                t2 = sig2['Time']
+                # 时效检查
+                if (datetime.now(pd.to_datetime(t2).tz) - pd.to_datetime(t2)).total_seconds() < 1800:
+                    val = int(sig2['Signal'])
+                    
+                    if val == 1: # 做多信号 -> 加仓
+                        execute_trade("Reversal 2", current_price, sig2)
+                        
+                    elif val == -1: # 做空信号 -> 逃顶 (平全仓)
+                        pos = get_position(SYMBOL)
+                        if pos and pos['side'] == 'LONG':
+                            close_position("Reversal 2 Escape", pos)
+                        else:
+                            logger.info("🛑 Reversal 2 逃顶信号，但当前空仓，跳过。")
+                            
+                    last_time_2 = t2
+                else:
+                    last_time_2 = t2
+
+            # --- 3. 保本巡航 ---
+            check_breakeven()
+            
             time.sleep(CHECK_INTERVAL)
 
         except KeyboardInterrupt:
-            logger.info("程序停止。")
             break
         except Exception as e:
-            logger.error(f"异常: {e}")
+            logger.error(f"Error: {e}")
             time.sleep(5)
 
 if __name__ == "__main__":

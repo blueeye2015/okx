@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import pytz
 import okex.Market_api as Market
 import json
-from api_parser import parse_historytrades 
+from old.api_parser import parse_historytrades 
 
 
 

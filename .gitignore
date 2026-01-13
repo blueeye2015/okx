@@ -46,3 +46,8 @@ production_reversal2.log
 reversal_signals2.csv
 auto_trader_rest.log
 global_rolling_train.log
+auto_trader.log
+auto_trader_v5.log
+bot_trade_history.csv
+my_holdings.csv
+paper_trading_log.csv
