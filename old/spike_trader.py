@@ -9,7 +9,7 @@ import sys
 import clickhouse_connect
 import pandas as pd
 import pytz # <--- 1. 导入新库
-from trade_executor import TradingClient
+from old.trade_executor1 import TradingClient
 from trade_manager import TradeManager # 导入交易大脑
 
 # --- 配置区 ---

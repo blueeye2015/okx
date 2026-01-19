@@ -13,6 +13,7 @@ import base64
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import traceback
 
 # 加载环境变量
 load_dotenv('/data/okx/.env')
@@ -237,7 +238,7 @@ def execute_trade(signal_row, price):
             
             cancel_open_orders(SYMBOL)
             if place_order(SYMBOL, 'BUY', qty):
-                record_transaction("OPEN_LONG", price, qty)
+                record_transaction("Reversal 2 Escape","OPEN_LONG", price, qty)
                 
                 # 挂止盈止损
                 csv_tp = float(signal_row.get('TP_Price', 0))
@@ -364,7 +365,7 @@ def main():
     
     s2 = get_signal(SIGNAL_PATH)
     if s2 is not None: last_time_2 = s2['Time']
-    
+
     logger.info("⏳ 监控开始...")
 
     while True:
@@ -383,7 +384,7 @@ def main():
                     val = int(sig2['Signal'])
                     
                     if val == 1: # 做多信号 -> 加仓
-                        execute_trade("Reversal 2", current_price, sig2)
+                        execute_trade(sig2, current_price)
                         
                     elif val == -1: # 做空信号 -> 逃顶 (平全仓)
                         pos = get_position(SYMBOL)
@@ -405,6 +406,7 @@ def main():
             break
         except Exception as e:
             logger.error(f"Error: {e}")
+            logger.error(traceback.format_exc())  # 这行代码会告诉你是第几行报错
             time.sleep(5)
 
 if __name__ == "__main__":

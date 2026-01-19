@@ -5,40 +5,52 @@ import time
 
 # --- 配置 ---
 CLICKHOUSE = dict(host='localhost', port=8123, database='marketdata', username='default', password='12')
-SYMBOL_DEPTH = 'BTCUSDT'
-SYMBOL_TRADE = 'BTC-USDT'
+TARGET_SYMBOLS = [
+    {'depth': 'BTCUSDT', 'trade': 'BTC-USDT'},
+    {'depth': 'ETHUSDT', 'trade': 'ETH-USDT'}
+]
 BATCH_DAYS = 1  # 每次处理1天
 
-def get_incremental_range(client):
+def get_incremental_range(client, symbol_depth):
     """
     计算增量更新的时间范围
     """
     # 1. 找起点：查 features_15m 表里最后一条数据是几点
     try:
-        sql_last = f"SELECT max(time) FROM marketdata.features_15m WHERE symbol = '{SYMBOL_DEPTH}'"
+        sql_last = f"SELECT max(time) FROM marketdata.features_15m WHERE symbol = '{symbol_depth}'"
         res = client.query(sql_last).result_rows
         last_processed_time = res[0][0] if res and res[0][0] else None
     except Exception:
         last_processed_time = None
 
     # 2. 找终点：查 depth 表里最新数据是几点
-    sql_max = f"SELECT max(event_time) FROM marketdata.depth WHERE symbol = '{SYMBOL_DEPTH}'"
+    sql_max = f"SELECT max(event_time) FROM marketdata.depth WHERE symbol = '{symbol_depth}'"
     res = client.query(sql_max).result_rows
     # 如果没数据，默认现在
     max_depth_time = res[0][0] if res and res[0][0] else datetime.now()
 
-    # 3. 判定逻辑
+    need_init = False
     if last_processed_time is None:
-        print("⚠️ 特征表为空，执行全量初始化...")
-        sql_min = f"SELECT min(event_time) FROM marketdata.depth WHERE symbol = '{SYMBOL_DEPTH}'"
-        res = client.query(sql_min).result_rows
-        start_date = res[0][0] if res and res[0][0] else datetime(2024, 1, 1)
-        if start_date.year < 2020: start_date = datetime(2024, 1, 1)
+        need_init = True
+    elif last_processed_time.year < 2000:  # <--- 关键修改在这里
+        need_init = True
+
+    if need_init:
+        print(f"⚠️ [{symbol_depth}] 特征表为空或无效(1970)，执行全量初始化...")
         
-        # [Fix] 初始时间向下取整到 15分钟
-        start_date = start_date.replace(minute=start_date.minute // 15 * 15, second=0, microsecond=0)
+        # 查最早的 depth 数据作为起点
+        sql_min = f"SELECT min(event_time) FROM marketdata.depth WHERE symbol = '{symbol_depth}'"
+        res = client.query(sql_min).result_rows
+        
+        # 如果 depth 表里有数据，就用最早的数据；如果没有，给个硬保底
+        start_date = res[0][0] if res and res[0][0] else datetime(2025, 11, 1)
+        
+        # 这里的保底逻辑也可以加上
+        if start_date.year < 2020: 
+            start_date = datetime(2025, 11, 1)
     else:
-        print(f"✅ 上次更新到: {last_processed_time}")
+        # 正常的续传逻辑
+        print(f"✅ [{symbol_depth}] 续传起点: {last_processed_time}")
         start_date = last_processed_time + timedelta(minutes=15)
 
     # [Fix] 终点时间向下取整到 15分钟
@@ -48,16 +60,18 @@ def get_incremental_range(client):
 
     return start_date, end_date
 
-def update_features_incremental():
-    client = clickhouse_connect.get_client(**CLICKHOUSE)
+def update_features_incremental(client, config):
     
-    start_date, end_date = get_incremental_range(client)
+    symbol_depth = config['depth']
+    symbol_trade = config['trade']
+
+    start_date, end_date = get_incremental_range(client, symbol_depth)
     
     if start_date >= end_date:
         print("✨ 数据已是最新，无需更新。")
         return
 
-    print(f"📅 增量任务范围: {start_date} -> {end_date}")
+    print(f"🚀 开始处理 {symbol_depth}: {start_date} -> {end_date}")
     
     current_date = start_date
     
@@ -91,11 +105,12 @@ def update_features_incremental():
                 SELECT
                     toStartOfInterval(event_time, INTERVAL 15 MINUTE) as time,
                     argMax(price, event_time) as close_price,
-                    sum(if(buyer_order_maker = 0, quantity, 0)) as buy_vol,
-                    sum(if(buyer_order_maker = 1, quantity, 0)) as sell_vol,
-                    buy_vol - sell_vol as net_cvd
+                    sum(if(buyer_order_maker = 0, price * quantity, 0)) as buy_vol,
+                    sum(if(buyer_order_maker = 1, price * quantity, 0)) as sell_vol,
+                    buy_vol - sell_vol as net_cvd,
+                    if((buy_vol + sell_vol) > 0, net_cvd / (buy_vol + sell_vol), 0) as cvd_ratio
                 FROM marketdata.trades
-                WHERE symbol = '{SYMBOL_TRADE}' 
+                WHERE symbol = '{symbol_trade}' 
                   AND event_time >= '{t_calc_start}' AND event_time < '{t_calc_end}'
                 GROUP BY toStartOfInterval(event_time, INTERVAL 15 MINUTE) -- [修复] 不使用别名，直接重复表达式
             ),
@@ -103,8 +118,8 @@ def update_features_incremental():
             Spoofing AS (
                 SELECT
                     toStartOfInterval(event_time, INTERVAL 15 MINUTE) as time,
-                    sum(if(side='ask' AND delta < 0, abs(delta), 0)) as ask_withdraw_vol,
-                    sum(if(side='bid' AND delta < 0, abs(delta), 0)) as bid_withdraw_vol,
+                    sum(if(side='ask' AND delta < 0, abs(delta)* price, 0)) as ask_withdraw_vol,
+                    sum(if(side='bid' AND delta < 0, abs(delta)* price, 0)) as bid_withdraw_vol,
                     if(bid_withdraw_vol > 0, ask_withdraw_vol / bid_withdraw_vol, 1.0) as spoofing_ratio
                 FROM (
                     SELECT 
@@ -112,7 +127,7 @@ def update_features_incremental():
                         quantity - lagInFrame(quantity) OVER (ORDER BY side, price, event_time) as delta,
                         price - lagInFrame(price) OVER (ORDER BY side, price, event_time) as price_diff
                     FROM marketdata.depth
-                    WHERE symbol = '{SYMBOL_DEPTH}' 
+                    WHERE symbol = '{symbol_depth}' 
                       AND event_time >= '{t_calc_start}' AND event_time < '{t_calc_end}'
                 )
                 WHERE delta < -1.0 AND price_diff = 0
@@ -124,7 +139,7 @@ def update_features_incremental():
                     toStartOfInterval(snapshot_time, INTERVAL 15 MINUTE) as time,
                     argMax(price, snapshot_time) as close_bid_price
                 FROM marketdata.depth_snapshot
-                WHERE symbol = '{SYMBOL_DEPTH}' AND side = 'bid'
+                WHERE symbol = '{symbol_depth}' AND side = 'bid'
                   AND snapshot_time >= '{t_calc_start}' AND snapshot_time < '{t_calc_end}' 
                 GROUP BY toStartOfInterval(snapshot_time, INTERVAL 15 MINUTE) -- [修复]
             ),
@@ -133,7 +148,7 @@ def update_features_incremental():
             RawFeatures AS (
                 SELECT
                     T.time as time,
-                    '{SYMBOL_DEPTH}' as symbol,
+                    '{symbol_depth}' as symbol,
                     T.close_price as close_price,
                     
                     -- 计算 Raw Shift
@@ -142,6 +157,7 @@ def update_features_incremental():
                        0) as raw_wall_shift,
                        
                     T.net_cvd as net_cvd,
+                    T.cvd_ratio as cvd_ratio,
                     ifNull(SP.spoofing_ratio, 1.0) as spoofing_ratio,
                     ifNull(SP.ask_withdraw_vol, 0) as ask_withdraw_vol,
                     ifNull(SP.bid_withdraw_vol, 0) as bid_withdraw_vol
@@ -163,7 +179,8 @@ def update_features_incremental():
                     net_cvd,
                     spoofing_ratio,
                     ask_withdraw_vol,
-                    bid_withdraw_vol
+                    bid_withdraw_vol,
+                    cvd_ratio
                 FROM RawFeatures
                 WHERE time >= '{t_insert_start}' AND time < '{t_insert_end}'
             )
@@ -182,4 +199,8 @@ def update_features_incremental():
         current_date = next_date
 
 if __name__ == "__main__":
-    update_features_incremental()
+
+    client = clickhouse_connect.get_client(**CLICKHOUSE)
+    for config in TARGET_SYMBOLS:
+        update_features_incremental(client, config)
+    

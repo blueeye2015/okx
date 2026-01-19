@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from trade_executor import TradingClient # 从我们之前的交易执行器文件中导入
+from old.trade_executor1 import TradingClient # 从我们之前的交易执行器文件中导入
 
 # 日志配置
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

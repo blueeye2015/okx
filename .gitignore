@@ -4,6 +4,7 @@ book_get.py
 trade_strategy.log
 TRX-USDT_rade_strategy.log
 .vscode/launch.json
+.vscode/settings.json
 klines.log
 ma60_strategy.log
 .env
@@ -51,3 +52,4 @@ auto_trader_v5.log
 bot_trade_history.csv
 my_holdings.csv
 paper_trading_log.csv
+strategy_brain.log

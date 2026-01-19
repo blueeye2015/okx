@@ -3,7 +3,7 @@ import logging
 import time
 import clickhouse_connect
 from trade_manager import TradeManager
-from trade_executor import TradingClient # 需要导入TradingClient
+from old.trade_executor1 import TradingClient # 需要导入TradingClient
 from momentum_scanner import scan_and_rank_momentum
 
 # --- 全局配置 ---

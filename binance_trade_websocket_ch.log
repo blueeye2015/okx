@@ -1,3 +1,1127 @@
 2025-12-23 15:20:53,520 - INFO - ClickHouse 连接成功并创建表完成
 2025-12-23 15:20:54,303 - INFO - 已发送订阅请求
 2025-12-23 15:46:00,837 - INFO - 已发送订阅请求
+2026-01-14 17:41:55,015 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7358c9860b50>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2026-01-14 17:41:55,016 - WARNING - Unexpected Http Driver Exception
+2026-01-14 17:41:55,016 - ERROR - 数据库设置错误: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7358c9481e90>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 445, in request
+    self.endheaders()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1298, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1058, in _send_output
+    self.send(msg)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 996, in send
+    self.connect()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 276, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 213, in _new_conn
+    raise NewConnectionError(
+urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x7358c9481e90>: Failed to establish a new connection: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 456, in _raw_request
+    response = self.http.request(method, url, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 143, in request
+    return self.request_encode_body(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 278, in request_encode_body
+    return self.urlopen(method, url, **extra_kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/poolmanager.py", line 443, in urlopen
+    response = conn.urlopen(method, u.request_uri, **kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+    return self.urlopen(
+           ^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7358c9481e90>: Failed to establish a new connection: [Errno 111] Connection refused'))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/okx/binance_trade_websocket_ch.py", line 167, in <module>
+    asyncio.run(main())
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 158, in main
+    collector = BinanceTradeCollector()
+                ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 44, in __init__
+    self.setup_database()
+  File "/data/okx/binance_trade_websocket_ch.py", line 52, in setup_database
+    tmp = clickhouse_connect.get_client(**{**CLICKHOUSE, 'database': 'default'})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/__init__.py", line 122, in create_client
+    return HttpClient(interface, host, port, username, password, database, access_token,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 165, in __init__
+    super().__init__(database=database,
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 70, in __init__
+    self._init_common_settings(apply_server_timezone)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 75, in _init_common_settings
+    tuple(self.command('SELECT version(), timezone()', use_database=False))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 368, in command
+    response = self._raw_request(payload, params, headers, method, fields=fields, server_wait=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 468, in _raw_request
+    raise OperationalError(f'Error {ex} executing HTTP request attempt {attempts}{err_url}') from ex
+clickhouse_connect.driver.exceptions.OperationalError: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7358c9481e90>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2026-01-14 17:42:00,957 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7845c92629d0>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2026-01-14 17:42:00,958 - WARNING - Unexpected Http Driver Exception
+2026-01-14 17:42:00,958 - ERROR - 数据库设置错误: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7845c92854d0>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 445, in request
+    self.endheaders()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1298, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1058, in _send_output
+    self.send(msg)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 996, in send
+    self.connect()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 276, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 213, in _new_conn
+    raise NewConnectionError(
+urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x7845c92854d0>: Failed to establish a new connection: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 456, in _raw_request
+    response = self.http.request(method, url, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 143, in request
+    return self.request_encode_body(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 278, in request_encode_body
+    return self.urlopen(method, url, **extra_kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/poolmanager.py", line 443, in urlopen
+    response = conn.urlopen(method, u.request_uri, **kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+    return self.urlopen(
+           ^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7845c92854d0>: Failed to establish a new connection: [Errno 111] Connection refused'))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/okx/binance_trade_websocket_ch.py", line 167, in <module>
+    asyncio.run(main())
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 158, in main
+    collector = BinanceTradeCollector()
+                ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 44, in __init__
+    self.setup_database()
+  File "/data/okx/binance_trade_websocket_ch.py", line 52, in setup_database
+    tmp = clickhouse_connect.get_client(**{**CLICKHOUSE, 'database': 'default'})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/__init__.py", line 122, in create_client
+    return HttpClient(interface, host, port, username, password, database, access_token,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 165, in __init__
+    super().__init__(database=database,
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 70, in __init__
+    self._init_common_settings(apply_server_timezone)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 75, in _init_common_settings
+    tuple(self.command('SELECT version(), timezone()', use_database=False))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 368, in command
+    response = self._raw_request(payload, params, headers, method, fields=fields, server_wait=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 468, in _raw_request
+    raise OperationalError(f'Error {ex} executing HTTP request attempt {attempts}{err_url}') from ex
+clickhouse_connect.driver.exceptions.OperationalError: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7845c92854d0>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2026-01-14 17:42:06,748 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x770231022dd0>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2026-01-14 17:42:06,748 - WARNING - Unexpected Http Driver Exception
+2026-01-14 17:42:06,748 - ERROR - 数据库设置错误: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7702310417d0>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 445, in request
+    self.endheaders()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1298, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1058, in _send_output
+    self.send(msg)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 996, in send
+    self.connect()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 276, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 213, in _new_conn
+    raise NewConnectionError(
+urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x7702310417d0>: Failed to establish a new connection: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 456, in _raw_request
+    response = self.http.request(method, url, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 143, in request
+    return self.request_encode_body(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 278, in request_encode_body
+    return self.urlopen(method, url, **extra_kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/poolmanager.py", line 443, in urlopen
+    response = conn.urlopen(method, u.request_uri, **kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+    return self.urlopen(
+           ^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7702310417d0>: Failed to establish a new connection: [Errno 111] Connection refused'))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/okx/binance_trade_websocket_ch.py", line 167, in <module>
+    asyncio.run(main())
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 158, in main
+    collector = BinanceTradeCollector()
+                ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 44, in __init__
+    self.setup_database()
+  File "/data/okx/binance_trade_websocket_ch.py", line 52, in setup_database
+    tmp = clickhouse_connect.get_client(**{**CLICKHOUSE, 'database': 'default'})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/__init__.py", line 122, in create_client
+    return HttpClient(interface, host, port, username, password, database, access_token,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 165, in __init__
+    super().__init__(database=database,
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 70, in __init__
+    self._init_common_settings(apply_server_timezone)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 75, in _init_common_settings
+    tuple(self.command('SELECT version(), timezone()', use_database=False))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 368, in command
+    response = self._raw_request(payload, params, headers, method, fields=fields, server_wait=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 468, in _raw_request
+    raise OperationalError(f'Error {ex} executing HTTP request attempt {attempts}{err_url}') from ex
+clickhouse_connect.driver.exceptions.OperationalError: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7702310417d0>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2026-01-14 17:42:12,647 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7e1fa38db510>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2026-01-14 17:42:12,648 - WARNING - Unexpected Http Driver Exception
+2026-01-14 17:42:12,648 - ERROR - 数据库设置错误: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7e1fa38fa110>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 445, in request
+    self.endheaders()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1298, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1058, in _send_output
+    self.send(msg)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 996, in send
+    self.connect()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 276, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 213, in _new_conn
+    raise NewConnectionError(
+urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x7e1fa38fa110>: Failed to establish a new connection: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 456, in _raw_request
+    response = self.http.request(method, url, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 143, in request
+    return self.request_encode_body(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 278, in request_encode_body
+    return self.urlopen(method, url, **extra_kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/poolmanager.py", line 443, in urlopen
+    response = conn.urlopen(method, u.request_uri, **kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+    return self.urlopen(
+           ^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7e1fa38fa110>: Failed to establish a new connection: [Errno 111] Connection refused'))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/okx/binance_trade_websocket_ch.py", line 167, in <module>
+    asyncio.run(main())
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 158, in main
+    collector = BinanceTradeCollector()
+                ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 44, in __init__
+    self.setup_database()
+  File "/data/okx/binance_trade_websocket_ch.py", line 52, in setup_database
+    tmp = clickhouse_connect.get_client(**{**CLICKHOUSE, 'database': 'default'})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/__init__.py", line 122, in create_client
+    return HttpClient(interface, host, port, username, password, database, access_token,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 165, in __init__
+    super().__init__(database=database,
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 70, in __init__
+    self._init_common_settings(apply_server_timezone)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 75, in _init_common_settings
+    tuple(self.command('SELECT version(), timezone()', use_database=False))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 368, in command
+    response = self._raw_request(payload, params, headers, method, fields=fields, server_wait=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 468, in _raw_request
+    raise OperationalError(f'Error {ex} executing HTTP request attempt {attempts}{err_url}') from ex
+clickhouse_connect.driver.exceptions.OperationalError: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7e1fa38fa110>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2026-01-14 17:42:18,557 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x78d0870db810>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2026-01-14 17:42:18,558 - WARNING - Unexpected Http Driver Exception
+2026-01-14 17:42:18,558 - ERROR - 数据库设置错误: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x78d085d9f790>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 445, in request
+    self.endheaders()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1298, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1058, in _send_output
+    self.send(msg)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 996, in send
+    self.connect()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 276, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 213, in _new_conn
+    raise NewConnectionError(
+urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x78d085d9f790>: Failed to establish a new connection: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 456, in _raw_request
+    response = self.http.request(method, url, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 143, in request
+    return self.request_encode_body(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 278, in request_encode_body
+    return self.urlopen(method, url, **extra_kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/poolmanager.py", line 443, in urlopen
+    response = conn.urlopen(method, u.request_uri, **kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+    return self.urlopen(
+           ^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x78d085d9f790>: Failed to establish a new connection: [Errno 111] Connection refused'))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/okx/binance_trade_websocket_ch.py", line 167, in <module>
+    asyncio.run(main())
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 158, in main
+    collector = BinanceTradeCollector()
+                ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 44, in __init__
+    self.setup_database()
+  File "/data/okx/binance_trade_websocket_ch.py", line 52, in setup_database
+    tmp = clickhouse_connect.get_client(**{**CLICKHOUSE, 'database': 'default'})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/__init__.py", line 122, in create_client
+    return HttpClient(interface, host, port, username, password, database, access_token,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 165, in __init__
+    super().__init__(database=database,
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 70, in __init__
+    self._init_common_settings(apply_server_timezone)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 75, in _init_common_settings
+    tuple(self.command('SELECT version(), timezone()', use_database=False))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 368, in command
+    response = self._raw_request(payload, params, headers, method, fields=fields, server_wait=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 468, in _raw_request
+    raise OperationalError(f'Error {ex} executing HTTP request attempt {attempts}{err_url}') from ex
+clickhouse_connect.driver.exceptions.OperationalError: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x78d085d9f790>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2026-01-14 17:42:24,358 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7a541aa969d0>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2026-01-14 17:42:24,358 - WARNING - Unexpected Http Driver Exception
+2026-01-14 17:42:24,358 - ERROR - 数据库设置错误: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7a54196ed210>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 445, in request
+    self.endheaders()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1298, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1058, in _send_output
+    self.send(msg)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 996, in send
+    self.connect()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 276, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 213, in _new_conn
+    raise NewConnectionError(
+urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x7a54196ed210>: Failed to establish a new connection: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 456, in _raw_request
+    response = self.http.request(method, url, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 143, in request
+    return self.request_encode_body(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 278, in request_encode_body
+    return self.urlopen(method, url, **extra_kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/poolmanager.py", line 443, in urlopen
+    response = conn.urlopen(method, u.request_uri, **kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+    return self.urlopen(
+           ^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7a54196ed210>: Failed to establish a new connection: [Errno 111] Connection refused'))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/okx/binance_trade_websocket_ch.py", line 167, in <module>
+    asyncio.run(main())
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 158, in main
+    collector = BinanceTradeCollector()
+                ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 44, in __init__
+    self.setup_database()
+  File "/data/okx/binance_trade_websocket_ch.py", line 52, in setup_database
+    tmp = clickhouse_connect.get_client(**{**CLICKHOUSE, 'database': 'default'})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/__init__.py", line 122, in create_client
+    return HttpClient(interface, host, port, username, password, database, access_token,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 165, in __init__
+    super().__init__(database=database,
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 70, in __init__
+    self._init_common_settings(apply_server_timezone)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 75, in _init_common_settings
+    tuple(self.command('SELECT version(), timezone()', use_database=False))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 368, in command
+    response = self._raw_request(payload, params, headers, method, fields=fields, server_wait=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 468, in _raw_request
+    raise OperationalError(f'Error {ex} executing HTTP request attempt {attempts}{err_url}') from ex
+clickhouse_connect.driver.exceptions.OperationalError: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7a54196ed210>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2026-01-14 17:42:30,111 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x700aa1a5aed0>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2026-01-14 17:42:30,111 - WARNING - Unexpected Http Driver Exception
+2026-01-14 17:42:30,111 - ERROR - 数据库设置错误: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x700aa1a79a10>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 445, in request
+    self.endheaders()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1298, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1058, in _send_output
+    self.send(msg)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 996, in send
+    self.connect()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 276, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 213, in _new_conn
+    raise NewConnectionError(
+urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x700aa1a79a10>: Failed to establish a new connection: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 456, in _raw_request
+    response = self.http.request(method, url, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 143, in request
+    return self.request_encode_body(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 278, in request_encode_body
+    return self.urlopen(method, url, **extra_kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/poolmanager.py", line 443, in urlopen
+    response = conn.urlopen(method, u.request_uri, **kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+    return self.urlopen(
+           ^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x700aa1a79a10>: Failed to establish a new connection: [Errno 111] Connection refused'))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/okx/binance_trade_websocket_ch.py", line 167, in <module>
+    asyncio.run(main())
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 158, in main
+    collector = BinanceTradeCollector()
+                ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 44, in __init__
+    self.setup_database()
+  File "/data/okx/binance_trade_websocket_ch.py", line 52, in setup_database
+    tmp = clickhouse_connect.get_client(**{**CLICKHOUSE, 'database': 'default'})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/__init__.py", line 122, in create_client
+    return HttpClient(interface, host, port, username, password, database, access_token,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 165, in __init__
+    super().__init__(database=database,
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 70, in __init__
+    self._init_common_settings(apply_server_timezone)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 75, in _init_common_settings
+    tuple(self.command('SELECT version(), timezone()', use_database=False))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 368, in command
+    response = self._raw_request(payload, params, headers, method, fields=fields, server_wait=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 468, in _raw_request
+    raise OperationalError(f'Error {ex} executing HTTP request attempt {attempts}{err_url}') from ex
+clickhouse_connect.driver.exceptions.OperationalError: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x700aa1a79a10>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2026-01-14 17:42:35,893 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x744164d3f510>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2026-01-14 17:42:35,893 - WARNING - Unexpected Http Driver Exception
+2026-01-14 17:42:35,893 - ERROR - 数据库设置错误: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x744164d5ded0>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 445, in request
+    self.endheaders()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1298, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1058, in _send_output
+    self.send(msg)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 996, in send
+    self.connect()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 276, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 213, in _new_conn
+    raise NewConnectionError(
+urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x744164d5ded0>: Failed to establish a new connection: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 456, in _raw_request
+    response = self.http.request(method, url, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 143, in request
+    return self.request_encode_body(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 278, in request_encode_body
+    return self.urlopen(method, url, **extra_kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/poolmanager.py", line 443, in urlopen
+    response = conn.urlopen(method, u.request_uri, **kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+    return self.urlopen(
+           ^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x744164d5ded0>: Failed to establish a new connection: [Errno 111] Connection refused'))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/okx/binance_trade_websocket_ch.py", line 167, in <module>
+    asyncio.run(main())
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 158, in main
+    collector = BinanceTradeCollector()
+                ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 44, in __init__
+    self.setup_database()
+  File "/data/okx/binance_trade_websocket_ch.py", line 52, in setup_database
+    tmp = clickhouse_connect.get_client(**{**CLICKHOUSE, 'database': 'default'})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/__init__.py", line 122, in create_client
+    return HttpClient(interface, host, port, username, password, database, access_token,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 165, in __init__
+    super().__init__(database=database,
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 70, in __init__
+    self._init_common_settings(apply_server_timezone)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 75, in _init_common_settings
+    tuple(self.command('SELECT version(), timezone()', use_database=False))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 368, in command
+    response = self._raw_request(payload, params, headers, method, fields=fields, server_wait=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 468, in _raw_request
+    raise OperationalError(f'Error {ex} executing HTTP request attempt {attempts}{err_url}') from ex
+clickhouse_connect.driver.exceptions.OperationalError: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x744164d5ded0>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2026-01-14 17:42:41,617 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x73f0b0568b50>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2026-01-14 17:42:41,617 - WARNING - Unexpected Http Driver Exception
+2026-01-14 17:42:41,617 - ERROR - 数据库设置错误: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x73f0aa701710>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 445, in request
+    self.endheaders()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1298, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1058, in _send_output
+    self.send(msg)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 996, in send
+    self.connect()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 276, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 213, in _new_conn
+    raise NewConnectionError(
+urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x73f0aa701710>: Failed to establish a new connection: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 456, in _raw_request
+    response = self.http.request(method, url, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 143, in request
+    return self.request_encode_body(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 278, in request_encode_body
+    return self.urlopen(method, url, **extra_kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/poolmanager.py", line 443, in urlopen
+    response = conn.urlopen(method, u.request_uri, **kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+    return self.urlopen(
+           ^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x73f0aa701710>: Failed to establish a new connection: [Errno 111] Connection refused'))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/okx/binance_trade_websocket_ch.py", line 167, in <module>
+    asyncio.run(main())
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 158, in main
+    collector = BinanceTradeCollector()
+                ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 44, in __init__
+    self.setup_database()
+  File "/data/okx/binance_trade_websocket_ch.py", line 52, in setup_database
+    tmp = clickhouse_connect.get_client(**{**CLICKHOUSE, 'database': 'default'})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/__init__.py", line 122, in create_client
+    return HttpClient(interface, host, port, username, password, database, access_token,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 165, in __init__
+    super().__init__(database=database,
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 70, in __init__
+    self._init_common_settings(apply_server_timezone)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 75, in _init_common_settings
+    tuple(self.command('SELECT version(), timezone()', use_database=False))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 368, in command
+    response = self._raw_request(payload, params, headers, method, fields=fields, server_wait=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 468, in _raw_request
+    raise OperationalError(f'Error {ex} executing HTTP request attempt {attempts}{err_url}') from ex
+clickhouse_connect.driver.exceptions.OperationalError: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x73f0aa701710>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2026-01-14 17:42:47,391 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x77949e8b0950>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2026-01-14 17:42:47,391 - WARNING - Unexpected Http Driver Exception
+2026-01-14 17:42:47,391 - ERROR - 数据库设置错误: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x779475879c10>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 445, in request
+    self.endheaders()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1298, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1058, in _send_output
+    self.send(msg)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 996, in send
+    self.connect()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 276, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 213, in _new_conn
+    raise NewConnectionError(
+urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x779475879c10>: Failed to establish a new connection: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 456, in _raw_request
+    response = self.http.request(method, url, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 143, in request
+    return self.request_encode_body(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 278, in request_encode_body
+    return self.urlopen(method, url, **extra_kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/poolmanager.py", line 443, in urlopen
+    response = conn.urlopen(method, u.request_uri, **kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+    return self.urlopen(
+           ^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x779475879c10>: Failed to establish a new connection: [Errno 111] Connection refused'))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/okx/binance_trade_websocket_ch.py", line 167, in <module>
+    asyncio.run(main())
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 158, in main
+    collector = BinanceTradeCollector()
+                ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 44, in __init__
+    self.setup_database()
+  File "/data/okx/binance_trade_websocket_ch.py", line 52, in setup_database
+    tmp = clickhouse_connect.get_client(**{**CLICKHOUSE, 'database': 'default'})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/__init__.py", line 122, in create_client
+    return HttpClient(interface, host, port, username, password, database, access_token,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 165, in __init__
+    super().__init__(database=database,
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 70, in __init__
+    self._init_common_settings(apply_server_timezone)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 75, in _init_common_settings
+    tuple(self.command('SELECT version(), timezone()', use_database=False))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 368, in command
+    response = self._raw_request(payload, params, headers, method, fields=fields, server_wait=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 468, in _raw_request
+    raise OperationalError(f'Error {ex} executing HTTP request attempt {attempts}{err_url}') from ex
+clickhouse_connect.driver.exceptions.OperationalError: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x779475879c10>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2026-01-14 17:42:53,098 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=0, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7d648d2db290>: Failed to establish a new connection: [Errno 111] Connection refused')': /?
+2026-01-14 17:42:53,099 - WARNING - Unexpected Http Driver Exception
+2026-01-14 17:42:53,099 - ERROR - 数据库设置错误: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7d648d2f9cd0>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 445, in request
+    self.endheaders()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1298, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 1058, in _send_output
+    self.send(msg)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/http/client.py", line 996, in send
+    self.connect()
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 276, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connection.py", line 213, in _new_conn
+    raise NewConnectionError(
+urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x7d648d2f9cd0>: Failed to establish a new connection: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 456, in _raw_request
+    response = self.http.request(method, url, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 143, in request
+    return self.request_encode_body(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/_request_methods.py", line 278, in request_encode_body
+    return self.urlopen(method, url, **extra_kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/poolmanager.py", line 443, in urlopen
+    response = conn.urlopen(method, u.request_uri, **kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+    return self.urlopen(
+           ^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7d648d2f9cd0>: Failed to establish a new connection: [Errno 111] Connection refused'))
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/okx/binance_trade_websocket_ch.py", line 167, in <module>
+    asyncio.run(main())
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 158, in main
+    collector = BinanceTradeCollector()
+                ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/okx/binance_trade_websocket_ch.py", line 44, in __init__
+    self.setup_database()
+  File "/data/okx/binance_trade_websocket_ch.py", line 52, in setup_database
+    tmp = clickhouse_connect.get_client(**{**CLICKHOUSE, 'database': 'default'})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/__init__.py", line 122, in create_client
+    return HttpClient(interface, host, port, username, password, database, access_token,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 165, in __init__
+    super().__init__(database=database,
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 70, in __init__
+    self._init_common_settings(apply_server_timezone)
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/client.py", line 75, in _init_common_settings
+    tuple(self.command('SELECT version(), timezone()', use_database=False))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 368, in command
+    response = self._raw_request(payload, params, headers, method, fields=fields, server_wait=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/anaconda3/envs/okx_api/lib/python3.11/site-packages/clickhouse_connect/driver/httpclient.py", line 468, in _raw_request
+    raise OperationalError(f'Error {ex} executing HTTP request attempt {attempts}{err_url}') from ex
+clickhouse_connect.driver.exceptions.OperationalError: Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded with url: /? (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7d648d2f9cd0>: Failed to establish a new connection: [Errno 111] Connection refused')) executing HTTP request attempt 1 (http://localhost:8123)
+2026-01-14 17:42:58,933 - INFO - ClickHouse 连接成功并创建表完成
+2026-01-14 17:42:58,964 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [None]
+2026-01-14 17:43:03,971 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-14 17:43:08,977 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-14 17:43:13,987 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-14 17:43:18,995 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [None]
+2026-01-14 17:43:29,004 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-14 17:43:39,012 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-14 17:43:49,021 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-14 17:43:59,029 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-14 17:44:09,036 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-14 17:44:19,044 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-14 17:44:29,050 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-14 17:44:34,525 - INFO - 已发送订阅请求
+2026-01-15 01:34:44,168 - INFO - 已发送订阅请求
+2026-01-15 23:04:53,028 - INFO - 已发送订阅请求
+2026-01-15 23:11:11,116 - INFO - 已发送订阅请求
+2026-01-17 11:41:59,013 - INFO - 已发送订阅请求
+2026-01-17 17:14:49,135 - INFO - 已发送订阅请求
+2026-01-17 22:14:06,068 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-17 22:14:11,646 - INFO - 已发送订阅请求
+2026-01-18 02:36:11,222 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-18 02:36:16,469 - INFO - 已发送订阅请求
+2026-01-18 14:06:35,435 - INFO - 已发送订阅请求

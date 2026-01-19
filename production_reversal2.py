@@ -26,19 +26,48 @@ RSI_PERIOD = 14
 # --- 多头策略 (Long) 参数 ---
 # 逻辑: 恐慌抛售后 + 强力资金回补
 LONG_RSI_THRES = 45       # RSI 必须超卖 (宽松点给 45)
-LONG_MIN_CVD = 10.0       # 启动资金至少 +10M
+LONG_MIN_CVD = 2_000_000       # 启动资金至少 +10M
 LONG_IGNITION_RATIO = 0.4 # 启动资金 / 恐慌资金 >= 0.4 (回补力度要够)
 LONG_TP = 0.015           # 止盈 1.5%
 LONG_SL = 0.008           # 止损 0.8%
 
 # --- 空头策略 (Short) 参数 ---
 # 逻辑: 价格创新高 + 资金巨量流出 (背离)
-SHORT_MIN_SELL_CVD = -10.0 # 砸盘资金至少 -10M
+SHORT_MIN_SELL_CVD = -2_000_000 # 砸盘资金至少 -10M
 SHORT_TP = 0.015           # 止盈 1.5%
 SHORT_SL = 0.008           # 止损 0.8%
 
+# [风控] 价格必须达到 24h最高价 的 99.5% 才做空 (防死猫跳)
+SHORT_NEAR_HIGH_PCT = 0.995
+
+# [风控] 价格低于 24h均线 超过 3% 禁止做多 (防瀑布)
+LONG_MAX_DEV_FROM_MA = -0.03
+
+
+# ==========================================
+# 3. Helper Functions
+# ==========================================
+
+def format_large_number(num):
+    """Formats large numbers into K/M/B for readability."""
+    if num is None: return "0"
+    abs_num = abs(num)
+    sign = "-" if num < 0 else ""
+    
+    if abs_num >= 1_000_000_000:
+        return f"{sign}{abs_num / 1_000_000_000:.2f}B"
+    elif abs_num >= 1_000_000:
+        return f"{sign}{abs_num / 1_000_000:.2f}M"
+    elif abs_num >= 1_000:
+        return f"{sign}{abs_num / 1_000:.0f}K"
+    else:
+        return f"{sign}{abs_num:.2f}"
+    
 def get_latest_market_data():
-    """获取最近 50 根K线用于计算指标"""
+    """获取最近 50 根K线用于计算指标
+    [修改] 获取最近 150 根K线 
+    (24小时 = 4 * 24 = 96根，取150根为了保证 rolling 计算有足够数据)
+    """
     client = clickhouse_connect.get_client(**CLICKHOUSE)
     
     query = f"""
@@ -48,7 +77,7 @@ def get_latest_market_data():
     FROM marketdata.features_15m
     WHERE symbol = '{SYMBOL}'
     ORDER BY time DESC
-    LIMIT 50
+    LIMIT 150
     """
     df = client.query_df(query)
     # 转为正序 (旧 -> 新)
@@ -66,6 +95,11 @@ def calculate_signals(df):
     loss = (-delta.where(delta < 0, 0)).rolling(window=RSI_PERIOD).mean()
     rs = gain / loss.replace(0, 1)
     df['rsi'] = 100 - (100 / (1 + rs))
+
+    # 2. [新增] 现场计算 24小时 (96根K线) 指标
+    # window=96 代表过去24小时
+    df['ma_24h'] = df['close_price'].rolling(window=96).mean()
+    df['high_24h'] = df['close_price'].rolling(window=96).max()
     
     # 获取当前K线 (Latest) 和 历史K线
     curr = df.iloc[-1]
@@ -96,14 +130,23 @@ def calculate_signals(df):
     
     # 4. 判定启动
     is_strong_ignition = (curr['net_cvd'] > LONG_MIN_CVD) and (ignition_ratio > LONG_IGNITION_RATIO)
+
+    # [风控] 计算偏离度 (当前价 vs 24h均线)
+    # 注意：如果数据不足96根，ma_24h 可能是 NaN，这里用 fillna 处理一下
+    ma_val = curr['ma_24h'] if pd.notnull(curr['ma_24h']) else curr['close_price']
+    dev_from_ma = (curr['close_price'] - ma_val) / ma_val
+    is_safe_dip = dev_from_ma > LONG_MAX_DEV_FROM_MA
     
     if is_oversold and is_strong_ignition:
-        signal = 1 # 1 代表做多信号 (Executor需适配)
-        signal_type = "🚀 LONG (Strong Reversal)"
-        desc = f"CVD:{curr['net_cvd']:.1f} vs Panic:{recent_panic_cvd:.1f} (Ratio {ignition_ratio:.2f})"
-        tp_pct = LONG_TP
-        sl_pct = LONG_SL
-        prob = 0.88 # 高胜率形态
+        if is_safe_dip:
+            signal = 1 # 1 代表做多信号 (Executor需适配)
+            signal_type = "🚀 LONG (Strong Reversal)"
+            desc = f"CVD:{format_large_number(curr['net_cvd'])} vs Panic:{format_large_number(recent_panic_cvd)} (Ratio {ignition_ratio:.2f})"
+            tp_pct = LONG_TP
+            sl_pct = LONG_SL
+            prob = 0.88 # 高胜率形态
+        else:
+            print(f"🛑 [拦截 Long] 严重偏离均线 ({dev_from_ma*100:.2f}%)，放弃接刀。")
 
     # ==========================================
     # 策略 B: 顶部资金背离 (Short Logic)
@@ -112,17 +155,27 @@ def calculate_signals(df):
     local_high_price = history_4bar['close_price'].max()
     is_new_high = curr['close_price'] > local_high_price
     
+    # 2. [风控] 全局新高 (24小时)
+    # 只有当前价接近 24h 高点时，才算有效
+    global_high = curr['high_24h'] if pd.notnull(curr['high_24h']) else curr['close_price']
+    dist_to_high = curr['close_price'] / global_high
+    is_global_high = dist_to_high >= SHORT_NEAR_HIGH_PCT
+    
     # 2. 资金流出 (CVD 为负且有一定规模)
     is_selling = curr['net_cvd'] < SHORT_MIN_SELL_CVD
     
     # 只有在没有 Long 信号时才检查 Short (避免冲突，Long 优先抄底)
     if signal == 0 and is_new_high and is_selling:
-        signal = -1 # -1 代表做空信号 (Executor需适配)
-        signal_type = "🔻 SHORT (Bearish Div)"
-        desc = f"New High({curr['close_price']:.0f}) but CVD:{curr['net_cvd']:.1f}"
-        tp_pct = SHORT_TP
-        sl_pct = SHORT_SL
-        prob = 0.85 
+        if is_global_high:
+            signal = -1 # -1 代表做空信号 (Executor需适配)
+            signal_type = "🔻 SHORT (Bearish Div)"
+            desc = f"New High({curr['close_price']:.0f}) but CVD:{curr['net_cvd']:.1f}"
+            tp_pct = SHORT_TP
+            sl_pct = SHORT_SL
+            prob = 0.85 
+        else:
+            # 只是反弹，不是新高
+            print(f"🛑 [拦截 Short] 仅局部反弹，距24h高点({global_high:.0f})尚远，不做空。")
 
     # 调试状态返回 (用于打印日志)
     debug_info = {
@@ -166,10 +219,10 @@ def run_monitor():
     # ==========================================
     print(f"\n[{system_time}] ⚡ K线更新: {data_time}")
     print(f"   价格: {current_price:.2f} | 信号: {sig_type}")
-    print(f"   数据: RSI({debug['RSI']:.1f}) | CVD({debug['CVD']:.1f})")
+    print(f"   Stats: RSI({debug['RSI']:.1f}) | CVD({format_large_number(debug['CVD'])})")
     
     if signal == 0:
-        print(f"   状态: 恐慌CVD({debug['Panic_CVD']:.1f}) | 启动比率({debug['Ratio']:.2f})")
+        print(f"   State: PanicCVD({format_large_number(debug['Panic_CVD'])}) | Ratio({debug['Ratio']:.2f})")
     elif signal == 1:
         print(f"   🔥 触发多头: {desc}")
     elif signal == -1:
@@ -211,8 +264,8 @@ def run_monitor():
 
 if __name__ == "__main__":
     print("🦈 全能反转猎手 (Enhanced Long + Bearish Short) 启动...")
-    print(f"   LONG规则: RSI<{LONG_RSI_THRES} + CVD>{LONG_MIN_CVD} + Ratio>{LONG_IGNITION_RATIO}")
-    print(f"   SHORT规则: 新高 + CVD<{SHORT_MIN_SELL_CVD}")
+    print(f"   LONG Rules: RSI<{LONG_RSI_THRES} + CVD>{format_large_number(LONG_MIN_CVD)} + Ratio>{LONG_IGNITION_RATIO}")
+    print(f"   SHORT Rules: New High + CVD<{format_large_number(SHORT_MIN_SELL_CVD)}")
     print(f"   日志模式: 无缓冲 (实时刷新)")
     
     while True:

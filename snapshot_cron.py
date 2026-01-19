@@ -17,20 +17,28 @@ REST_URL = "https://api.binance.com/api/v3/depth"
 SYMBOLS = ['BTCUSDT', 'ETHUSDT']
 LIMIT = 1000  # 获取深度档位，最大 5000
 INTERVAL = 60 # 抓取间隔 (秒)
-PROXY = {"https": "http://127.0.0.1:7890"} # requests 代理格式
+PROXIES = {
+    'http': 'http://127.0.0.1:7890',
+    'https': 'http://127.0.0.1:7890'
+} # requests 代理格式
 
 # --- 日志 ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("SnapshotCron")
 
+
+session = requests.Session()
+session.proxies = PROXIES
+session.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36'
+})
+
 def get_snapshot(symbol):
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36'
-    }
+    
     params = {'symbol': symbol.upper(), 'limit': LIMIT}
     
     try:
-        resp = requests.get(REST_URL, params=params, headers=headers, proxies=PROXY, timeout=10)
+        resp = session.get(REST_URL, params=params, timeout=10)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
