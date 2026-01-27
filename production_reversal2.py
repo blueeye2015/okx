@@ -169,7 +169,7 @@ def calculate_signals(df):
         if is_global_high:
             signal = -1 # -1 代表做空信号 (Executor需适配)
             signal_type = "🔻 SHORT (Bearish Div)"
-            desc = f"New High({curr['close_price']:.0f}) but CVD:{curr['net_cvd']:.1f}"
+            desc = f"New High({curr['close_price']:.0f}) but CVD:{format_large_number(curr['net_cvd'])}"
             tp_pct = SHORT_TP
             sl_pct = SHORT_SL
             prob = 0.85 

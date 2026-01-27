@@ -7,15 +7,15 @@ from datetime import datetime
 
 # ================= 配置区 =================
 CLICKHOUSE = dict(host='localhost', port=8123, database='marketdata', username='default', password='12')
-SYMBOL = 'BTCUSDT'
-SIGNAL_OUTPUT_PATH = '/data/okx/reversal_signals.csv'
+SYMBOL = 'ETHUSDT'
+SIGNAL_OUTPUT_PATH = '/data/okx/eth_signals.csv'
 
 # 策略参数 (根据 12/26 行情调优)
 LOOKBACK_WINDOW = 8       # 回看过去 8 根K线 (2小时) 寻找恐慌
 PANIC_CVD_THRES = -20.0   # 定义什么是恐慌：单根 CVD 流出超过 20M
 RSI_OVERSOLD = 45         # RSI 阈值 (宽松一点，因为我们要抓启动瞬间)
-IGNITION_CVD = 5.0        # 启动信号：CVD 必须大于 5M
-IGNITION_WALL = 0.0       # 启动信号：墙必须增加 (不能撤单)
+IGNITION_CVD = -10000000        # 启动信号：CVD 必须大于 1kw
+IGNITION_WALL = -1.0       # 启动信号：墙必须增加 (不能撤单)
 
 # 止盈止损 (反转单盈亏比通常很好)
 TP_PCT = 0.015  # 止盈 1.5% (吃反弹)
@@ -63,16 +63,16 @@ def calculate_signals(df):
     
     # A. 恐慌判定: 过去一段时间，是否有过暴跌式流出？
     # 检查历史中最小的 CVD 是否小于阈值 (例如 -34)
-    has_panic_history = history['net_cvd'].min() < PANIC_CVD_THRES
+    #has_panic_history = history['net_cvd'].min() < PANIC_CVD_THRES
     
     # B. 磨底判定: 当前价格是否在低位？
     # 当前价格 <= 历史最低价 * 1.003 (允许 0.3% 的误差，即没有飞得太高)
     lowest_price = history['close_price'].min()
-    is_at_bottom = curr['close_price'] <= lowest_price * 1.003
+    is_at_bottom = curr['close_price'] <= lowest_price 
     
     # C. 启动判定 (Trigger): 现在的资金和墙怎么样？
     # 12/26 08:45 的情况：CVD +16, Wall +0.10
-    is_ignition = (curr['net_cvd'] > IGNITION_CVD) and (curr['wall_shift_pct'] > IGNITION_WALL)
+    is_ignition = (curr['net_cvd'] < IGNITION_CVD) and (curr['wall_shift_pct'] < IGNITION_WALL)
     
     # D. RSI 辅助
     is_oversold = curr['rsi'] < RSI_OVERSOLD
@@ -82,12 +82,13 @@ def calculate_signals(df):
     reason = "WAIT"
     
     # 只有当：有过恐慌 + 现在还在底部 + 突然资金进场 + RSI不高 -> 买入！
-    if has_panic_history and is_at_bottom and is_ignition and is_oversold:
+    if  is_at_bottom and is_ignition and is_oversold:
         signal = 1
         reason = "🚀 REVERSAL (背离启动)"
     
     # 调试日志 (方便你观察当前状态)
     debug_info = {
+        'crrent_rsi': curr['rsi'] ,
         'Panic_Min_CVD': history['net_cvd'].min(),
         'Price_vs_Low': f"{curr['close_price']:.1f}/{lowest_price:.1f}",
         'Cur_CVD': curr['net_cvd'],
@@ -124,6 +125,7 @@ def run_monitor():
     # 打印看板
     print(f"\n[{system_time}] ⚡ K线更新: {data_time}")
     print(f"   价格: {current_price:.2f} | 信号: {reason}")
+    print(f"   rsi:{debug['crrent_rsi']}")
     print(f"   状态: 历史恐慌CVD({debug['Panic_Min_CVD']:.1f}) | 离底幅度({debug['Price_vs_Low']})")
     print(f"   触发: 当前CVD({debug['Cur_CVD']:.1f}) | 当前Wall({debug['Cur_Wall']:.4f})")
     
@@ -160,9 +162,9 @@ if __name__ == "__main__":
     while True:
         try:
             run_monitor()
-            time.sleep(10) # 10秒刷一次，等待 ClickHouse 数据更新
+            time.sleep(60) # 10秒刷一次，等待 ClickHouse 数据更新
         except KeyboardInterrupt:
             break
         except Exception as e:
             print(f"⚠️ 错误: {e}")
-            time.sleep(10)
+            time.sleep(60)
