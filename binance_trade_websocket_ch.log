@@ -1146,3 +1146,44 @@ clickhouse_connect.driver.exceptions.OperationalError: Error HTTPConnectionPool(
 2026-01-25 02:21:25,101 - INFO - 已发送订阅请求
 2026-01-25 10:22:06,899 - INFO - 已发送订阅请求
 2026-01-25 13:29:47,134 - INFO - 已发送订阅请求
+2026-01-27 14:15:02,776 - INFO - 已发送订阅请求
+2026-01-27 14:23:39,532 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-27 14:23:45,099 - INFO - 已发送订阅请求
+2026-01-28 11:08:00,470 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 11:08:10,474 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 11:08:20,483 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 11:08:30,489 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 11:08:40,498 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 11:08:50,503 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 11:09:00,511 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 11:09:10,519 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 11:09:16,908 - INFO - 已发送订阅请求
+2026-01-28 11:22:44,302 - INFO - 已发送订阅请求
+2026-01-28 21:22:29,522 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 21:22:39,532 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 21:22:49,536 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 21:22:59,544 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 21:23:09,549 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 21:23:19,553 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 21:23:29,559 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 21:23:39,565 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 21:23:49,573 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 21:23:59,582 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 21:24:09,589 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 21:24:19,596 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 21:24:29,607 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-01-28 21:24:34,955 - INFO - 已发送订阅请求
+2026-01-29 23:06:14,367 - INFO - 已发送订阅请求
+2026-01-30 11:36:59,620 - INFO - 已发送订阅请求
+2026-01-30 23:26:52,125 - INFO - 已发送订阅请求
+2026-02-01 00:01:12,755 - INFO - 已发送订阅请求
+2026-02-01 17:58:14,285 - INFO - 已发送订阅请求
+2026-02-02 01:37:28,097 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-02-02 01:37:38,105 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-02-02 01:37:48,111 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-02-02 01:37:58,119 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-02-02 01:38:08,127 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-02-02 01:38:18,131 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-02-02 01:38:28,138 - ERROR - WebSocket 异常: Cannot connect to host stream.binance.com:9443 ssl:<ssl.SSLContext object at 0x7224d1fffad0> [Connection reset by peer]
+2026-02-02 01:38:33,782 - INFO - 已发送订阅请求
+2026-02-02 02:48:03,231 - INFO - 已发送订阅请求

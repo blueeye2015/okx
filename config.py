@@ -10,9 +10,10 @@ class Config:
     BASE_URL = 'https://fapi.binance.com'
     
     PROXIES = {
-        'http': 'http://127.0.0.1:7890',
-        'https': 'http://127.0.0.1:7890'
+        "http": "socks5://ufo9_2010:9pgjAaWtzC@172.120.69.176:50101",
+        "https": "socks5://ufo9_2010:9pgjAaWtzC@172.120.69.176:50101"
     }
+    
 
     # --- 策略清单 (在这里扩展任意数量的策略) ---
     # config.py

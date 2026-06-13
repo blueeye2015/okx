@@ -1,0 +1,18 @@
+# 币安日K线定时任务示例 (crontab)
+# 
+# 使用方法:
+#   crontab -e
+# 然后粘贴下面的内容（根据你的实际路径调整）
+
+# 指定 conda 环境的 Python 路径
+PYTHON=/data/anaconda3/envs/okx_api/bin/python3
+SCRIPT=/data/okx/binance_daily_klines_pg.py
+
+# 每天 00:05 执行全量增量更新（现货+合约）
+5 0 * * * cd /data/okx && $PYTHON $SCRIPT --market all >> /data/okx/cron.log 2>&1
+
+# 如果只更新现货
+# 5 0 * * * cd /data/okx && $PYTHON $SCRIPT --market spot >> /data/okx/cron_spot.log 2>&1
+
+# 如果只更新合约
+# 5 0 * * * cd /data/okx && $PYTHON $SCRIPT --market swap >> /data/okx/cron_swap.log 2>&1

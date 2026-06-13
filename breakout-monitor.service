@@ -1,0 +1,16 @@
+[Unit]
+Description=MA24 Breakout Monitor
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/data/okx
+ExecStart=/data/anaconda3/envs/okx_api/bin/python3 /data/okx/breakout_monitor.py --market spot --daemon --interval 3600
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

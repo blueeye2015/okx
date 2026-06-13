@@ -1,0 +1,14 @@
+[Unit]
+Description=Binance Daily Klines Fetcher
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/data/okx
+ExecStart=/data/anaconda3/envs/okx_api/bin/python3 /data/okx/binance_daily_klines_pg.py --daemon --run-at 00:05
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

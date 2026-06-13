@@ -1,0 +1,6 @@
+# MA24突破监控 crontab 配置
+# 每小时运行一次扫描（推荐）
+0 * * * * cd /data/okx && /data/anaconda3/envs/okx_api/bin/python3 breakout_monitor.py --market spot --scan-now >> /data/okx/monitor_cron.log 2>&1
+
+# 或者每日00:05运行一次（与数据更新同步）
+# 5 0 * * * cd /data/okx && /data/anaconda3/envs/okx_api/bin/python3 breakout_monitor.py --market spot --scan-now >> /data/okx/monitor_cron.log 2>&1
